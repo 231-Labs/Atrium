@@ -18,9 +18,10 @@ interface SidebarProps {
   activeView?: 'explore' | 'my-space' | 'subscribed' | 'settings';
   isRegistering?: boolean;
   isDisabled?: boolean;
+  hasIdentity?: boolean;
 }
 
-export function Sidebar({ onViewChange, activeView = 'explore', isRegistering = false, isDisabled = false }: SidebarProps = {}) {
+export function Sidebar({ onViewChange, activeView = 'explore', isRegistering = false, isDisabled = false, hasIdentity = true }: SidebarProps = {}) {
   const router = useRouter();
   const currentAccount = useCurrentAccount();
 
@@ -52,7 +53,12 @@ export function Sidebar({ onViewChange, activeView = 'explore', isRegistering = 
   ];
 
   const handleNavigation = (item: SidebarItem) => {
+    if (isDisabled || isRegistering) return;
+    
     if (item.view && onViewChange) {
+      if (!hasIdentity && item.view !== 'explore') {
+        return;
+      }
       onViewChange(item.view);
     }
   };
@@ -188,7 +194,9 @@ export function Sidebar({ onViewChange, activeView = 'explore', isRegistering = 
       <nav className="md:flex-1 p-1 md:p-4 flex md:flex-col md:space-y-2 justify-around md:justify-start md:space-x-0">
         {menuItems.map((item) => {
           const isActive = item.view === activeView;
-          const isItemDisabled = isDisabled || (isRegistering && item.id !== 'explore');
+          const isItemDisabled = isDisabled || 
+                                 (isRegistering && item.id !== 'explore') ||
+                                 (!hasIdentity && item.id !== 'explore');
           
           return (
             <button

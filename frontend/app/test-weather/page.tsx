@@ -251,7 +251,7 @@ export default function TestWeatherPage() {
     <div className="relative w-full h-screen">
       <div className="absolute inset-0">
         <ThreeScene
-          kioskId="test-weather"
+          spaceId="test-weather"
           enableGallery={true}
           weatherParams={testParams}
         />

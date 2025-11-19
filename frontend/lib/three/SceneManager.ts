@@ -16,6 +16,7 @@ export class SceneManager {
   private galleryScene?: AtriumGalleryScene;
   private dracoLoader: DRACOLoader;
   private clock: THREE.Clock;
+  private transformControls?: any;
 
   constructor(canvas: HTMLCanvasElement, config: ThreeSceneConfig = {}) {
     this.clock = new THREE.Clock();

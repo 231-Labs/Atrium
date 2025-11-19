@@ -45,3 +45,7 @@ package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
+# Test generation scripts and generated test files
+generate_test_glb.py
+frontend/public/test-*.glb
+

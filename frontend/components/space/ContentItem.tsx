@@ -1,7 +1,6 @@
 "use client";
 
 import { RetroPanel } from "@/components/common/RetroPanel";
-import { RetroButton } from "@/components/common/RetroButton";
 
 export interface ContentItemData {
   id: string;
@@ -103,34 +102,6 @@ export function ContentItem({ item, isSubscribed, isCreator, onUnlock, onView }:
                   </div>
                 )}
               </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="mt-3 flex items-center gap-2">
-              {canAccess ? (
-                <RetroButton
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onView?.(item.id);
-                  }}
-                  variant="primary"
-                  size="sm"
-                >
-                  {item.type === "video" ? "▶ Play" : item.type === "merch" ? "View" : "Read"}
-                </RetroButton>
-              ) : (
-                <RetroButton
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onUnlock?.(item.id);
-                  }}
-                  variant="secondary"
-                  size="sm"
-                  className="w-full"
-                >
-                  Subscribe to Unlock
-                </RetroButton>
-              )}
             </div>
           </div>
         </div>

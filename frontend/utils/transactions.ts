@@ -1,22 +1,31 @@
 import { Transaction } from "@mysten/sui/transactions";
+import { 
+  SUI_CLOCK, 
+  MIST_PER_SUI, 
+  SUI_CHAIN,
+  PACKAGE_ID,
+  IDENTITY_REGISTRY_ID,
+  SPACE_REGISTRY_ID,
+  FAN_REGISTRY_ID,
+  SUBSCRIPTION_REGISTRY_ID,
+} from "@/config/sui";
 
-// Contract addresses - to be updated after deployment
-export const IDENTITY_PACKAGE_ID = process.env.NEXT_PUBLIC_IDENTITY_PACKAGE_ID || '';
-export const IDENTITY_REGISTRY_ID = process.env.NEXT_PUBLIC_IDENTITY_REGISTRY_ID || '';
-export const SPACE_PACKAGE_ID = process.env.NEXT_PUBLIC_SPACE_PACKAGE_ID || '';
-export const SUBSCRIPTION_PACKAGE_ID = process.env.NEXT_PUBLIC_SUBSCRIPTION_PACKAGE_ID || '';
-export const SUBSCRIPTION_REGISTRY_ID = process.env.NEXT_PUBLIC_SUBSCRIPTION_REGISTRY_ID || '';
+// Re-export for convenience
+export { 
+  SUI_CLOCK, 
+  MIST_PER_SUI, 
+  SUI_CHAIN,
+  PACKAGE_ID,
+  IDENTITY_REGISTRY_ID,
+  SPACE_REGISTRY_ID,
+  FAN_REGISTRY_ID,
+  SUBSCRIPTION_REGISTRY_ID,
+};
 
-export const SUI_CLOCK = '0x6';
-export const MIST_PER_SUI = 1_000_000_000;
-
-/**
- * Mint a new identity NFT
- */
 export const mintIdentity = (username: string, bio: string, avatarBlobId: string, imageBlobId: string) => {
   const tx = new Transaction();
   tx.moveCall({
-    target: `${IDENTITY_PACKAGE_ID}::identity::mint_identity`,
+    target: `${PACKAGE_ID}::identity::mint_identity`,
     arguments: [
       tx.object(IDENTITY_REGISTRY_ID),
       tx.pure.string(username),
@@ -29,13 +38,10 @@ export const mintIdentity = (username: string, bio: string, avatarBlobId: string
   return tx;
 };
 
-/**
- * Bind an avatar to an existing identity (Update avatar)
- */
 export const bindAvatar = (identityId: string, avatarBlobId: string) => {
   const tx = new Transaction();
   tx.moveCall({
-    target: `${IDENTITY_PACKAGE_ID}::identity::bind_avatar`,
+    target: `${PACKAGE_ID}::identity::bind_avatar`,
     arguments: [
       tx.object(identityId),
       tx.pure.string(avatarBlobId),
@@ -44,13 +50,34 @@ export const bindAvatar = (identityId: string, avatarBlobId: string) => {
   return tx;
 };
 
-/**
- * Become a creator (upgrade identity)
- */
+export const updateImage = (identityId: string, imageBlobId: string) => {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${PACKAGE_ID}::identity::update_image`,
+    arguments: [
+      tx.object(identityId),
+      tx.pure.string(imageBlobId),
+    ],
+  });
+  return tx;
+};
+
+export const updateBio = (identityId: string, bio: string) => {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${PACKAGE_ID}::identity::update_bio`,
+    arguments: [
+      tx.object(identityId),
+      tx.pure.string(bio),
+    ],
+  });
+  return tx;
+};
+
 export const becomeCreator = (identityId: string) => {
   const tx = new Transaction();
   tx.moveCall({
-    target: `${IDENTITY_PACKAGE_ID}::identity::become_creator`,
+    target: `${PACKAGE_ID}::identity::become_creator`,
     arguments: [
       tx.object(IDENTITY_REGISTRY_ID),
       tx.object(identityId)
@@ -59,11 +86,7 @@ export const becomeCreator = (identityId: string) => {
   return tx;
 };
 
-/**
- * Initialize a new space (creates kiosk and initializes space in one transaction)
- */
 export const initializeSpace = (
-  identityId: string,
   name: string,
   description: string,
   coverImageBlobId: string,
@@ -74,22 +97,21 @@ export const initializeSpace = (
 ) => {
   const tx = new Transaction();
   
-  // Create kiosk
-  const [kiosk, kioskCap] = tx.moveCall({
+  // 1. Create Marketplace Kiosk (for NFT trading in 3D scene)
+  const [marketplaceKiosk, marketplaceKioskCap] = tx.moveCall({
     target: "0x2::kiosk::new",
     arguments: [],
   });
 
-  // Pay for space initialization
+  // 2. Prepare payment for initialization fee
   const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(initPriceInMist)]);
 
-  // Initialize space
+  // 3. Initialize Space (creates shared Space + SpaceOwnership NFT)
   tx.moveCall({
-    target: `${SPACE_PACKAGE_ID}::space::initialize_space`,
+    target: `${PACKAGE_ID}::space::initialize_space`,
     arguments: [
-      tx.object(identityId),
-      kiosk,
-      kioskCap,
+      tx.object(SPACE_REGISTRY_ID),
+      marketplaceKiosk,  // Marketplace Kiosk (for NFT trading)
       tx.pure.string(name),
       tx.pure.string(description),
       tx.pure.string(coverImageBlobId),
@@ -100,42 +122,73 @@ export const initializeSpace = (
     ],
   });
 
-  // Share kiosk
+  // 4. Share Marketplace Kiosk (anyone can view NFTs)
   tx.moveCall({
     target: "0x2::transfer::public_share_object",
-    arguments: [kiosk],
+    arguments: [marketplaceKiosk],
     typeArguments: ["0x2::kiosk::Kiosk"],
   });
 
-  // Transfer kiosk cap to user
-  tx.transferObjects([kioskCap], tx.pure.address(recipientAddress));
+  // 5. Transfer Marketplace Kiosk Cap to the creator
+  // Note: SpaceOwnership NFT is automatically transferred to creator by the contract
+  tx.transferObjects([marketplaceKioskCap], tx.pure.address(recipientAddress));
 
   return tx;
 };
 
-/**
- * Update space configuration
- */
 export const updateSpaceConfig = (
-  kioskId: string,
-  kioskCapId: string,
-  newConfigQuiltBlobId: string,
+  spaceId: string,
+  ownershipId: string,
+  options: {
+    newName?: string;
+    newDescription?: string;
+    newCoverImage?: string;
+    newConfigQuilt?: string;
+    newSubscriptionPrice?: number;
+  }
 ) => {
   const tx = new Transaction();
+  
+  // Prepare optional arguments using Option type
+  const newName = options.newName 
+    ? tx.pure.option('string', options.newName)
+    : tx.pure.option('string', null);
+  
+  const newDescription = options.newDescription 
+    ? tx.pure.option('string', options.newDescription)
+    : tx.pure.option('string', null);
+  
+  const newCoverImage = options.newCoverImage 
+    ? tx.pure.option('string', options.newCoverImage)
+    : tx.pure.option('string', null);
+  
+  const newConfigQuilt = options.newConfigQuilt 
+    ? tx.pure.option('string', options.newConfigQuilt)
+    : tx.pure.option('string', null);
+  
+  const newSubscriptionPrice = options.newSubscriptionPrice !== undefined
+    ? tx.pure.option('u64', options.newSubscriptionPrice)
+    : tx.pure.option('u64', null);
+
   tx.moveCall({
-    target: `${SPACE_PACKAGE_ID}::space::update_space_config`,
+    target: `${PACKAGE_ID}::space::update_space_config`,
     arguments: [
-      tx.object(kioskId),
-      tx.object(kioskCapId),
-      tx.pure.string(newConfigQuiltBlobId),
+      tx.object(spaceId),
+      tx.object(ownershipId),  // SpaceOwnership NFT for verification
+      newName,
+      newDescription,
+      newCoverImage,
+      newConfigQuilt,
+      newSubscriptionPrice,
+      tx.object(SUI_CLOCK),
     ],
   });
   return tx;
 };
 
-/**
- * Add a fan avatar to a space
- */
+// Note: add_fan_avatar is not an entry function in the contract.
+// It is called internally by the subscription::subscribe function.
+// This function is kept for reference but cannot be used directly.
 export const addFanAvatar = (
   kioskId: string,
   fanAddress: string,
@@ -143,7 +196,7 @@ export const addFanAvatar = (
 ) => {
   const tx = new Transaction();
   tx.moveCall({
-    target: `${SPACE_PACKAGE_ID}::space::add_fan_avatar`,
+    target: `${PACKAGE_ID}::space::add_fan_avatar`,
     arguments: [
       tx.object(kioskId),
       tx.pure.address(fanAddress),
@@ -153,47 +206,41 @@ export const addFanAvatar = (
   return tx;
 };
 
-/**
- * Add a video to a space
- */
 export const addVideo = (
-  kioskId: string,
-  kioskCapId: string,
-  title: string,
-  encryptedBlobId: string,
-  sealResourceId: string,
+  spaceId: string,
+  ownershipId: string,
+  videoBlobId: string,
 ) => {
   const tx = new Transaction();
   tx.moveCall({
-    target: `${SPACE_PACKAGE_ID}::space::add_video`,
+    target: `${PACKAGE_ID}::space::add_video`,
     arguments: [
-      tx.object(kioskId),
-      tx.object(kioskCapId),
-      tx.pure.string(title),
-      tx.pure.string(encryptedBlobId),
-      tx.pure.string(sealResourceId),
+      tx.object(spaceId),
+      tx.object(ownershipId),  // SpaceOwnership NFT for verification
+      tx.pure.string(videoBlobId),
+      tx.object(SUI_CLOCK),
     ],
   });
   return tx;
 };
 
-/**
- * Subscribe to a space
- */
 export const subscribeToSpace = (
   identityId: string,
-  spaceKioskId: string,
+  spaceId: string,
   priceInMist: number,
   durationDays: number,
 ) => {
   const tx = new Transaction();
-  const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(priceInMist)]);
+  const totalPrice = priceInMist * durationDays;
+  const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(totalPrice)]);
   
   tx.moveCall({
-    target: `${SUBSCRIPTION_PACKAGE_ID}::subscription::subscribe`,
+    target: `${PACKAGE_ID}::subscription::subscribe`,
     arguments: [
+      tx.object(SUBSCRIPTION_REGISTRY_ID),
+      tx.object(FAN_REGISTRY_ID),
+      tx.object(spaceId),
       tx.object(identityId),
-      tx.object(spaceKioskId),
       paymentCoin,
       tx.pure.u64(durationDays),
       tx.object(SUI_CLOCK),
@@ -202,9 +249,6 @@ export const subscribeToSpace = (
   return tx;
 };
 
-/**
- * Renew a subscription
- */
 export const renewSubscription = (
   subscriptionId: string,
   priceInMist: number,
@@ -214,7 +258,7 @@ export const renewSubscription = (
   const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(priceInMist)]);
   
   tx.moveCall({
-    target: `${SUBSCRIPTION_PACKAGE_ID}::subscription::renew_subscription`,
+    target: `${PACKAGE_ID}::subscription::renew_subscription`,
     arguments: [
       tx.object(subscriptionId),
       paymentCoin,
@@ -225,23 +269,17 @@ export const renewSubscription = (
   return tx;
 };
 
-/**
- * Create a transaction for Seal access approval verification
- * This is used with Seal SDK to verify subscription-based access control
- */
 export const sealApproveBySubscription = (
   resourceIdBytes: Uint8Array,
   spaceKioskId: string,
 ) => {
   const tx = new Transaction();
-  
   tx.moveCall({
-    target: `${SPACE_PACKAGE_ID}::space::seal_approve_by_subscription`,
+    target: `${PACKAGE_ID}::space::seal_approve_by_subscription`,
     arguments: [
       tx.pure.vector('u8', Array.from(resourceIdBytes)),
       tx.object(spaceKioskId),
     ],
   });
-  
   return tx;
 };

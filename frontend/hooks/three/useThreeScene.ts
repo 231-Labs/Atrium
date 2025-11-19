@@ -203,7 +203,7 @@ export function useThreeScene(options: UseThreeSceneOptions = {}) {
   }, []);
 
   const pickObject = useCallback((x: number, y: number) => {
-    return sceneManagerRef.current?.pickObject(x, y);
+    return sceneManagerRef.current?.pickObject(x, y) || null;
   }, []);
 
   const getSceneState = useCallback(() => {

@@ -44,6 +44,8 @@ export class AtriumGalleryScene {
   private waterManager?: WaterEffectsManager; // Water effects manager
   private fishSchool: THREE.Mesh[] = []; // Swimming fish based on volume
   private energyBeams: THREE.Mesh[] = []; // Energy beams based on momentum
+  private smokeParticles?: THREE.Points; // Smoke particles for "smoking" island state
+  private fireParticles?: THREE.Points; // Fire particles for "burning" island state
 
   constructor(scene: THREE.Scene, config: AtriumGallerySceneConfig = {}, camera?: THREE.Camera) {
     this.scene = scene;
@@ -1599,6 +1601,87 @@ export class AtriumGalleryScene {
       // Slight rotation
       beam.rotation.y += deltaTime * 0.5;
     });
+
+    // Animate smoke particles
+    if (this.smokeParticles) {
+      const positions = this.smokeParticles.geometry.attributes.position.array as Float32Array;
+      const velocities = this.smokeParticles.geometry.attributes.velocity.array as Float32Array;
+      const sizes = this.smokeParticles.geometry.attributes.size.array as Float32Array;
+      const count = positions.length / 3;
+      
+      for (let i = 0; i < count; i++) {
+        const idx = i * 3;
+        
+        // Move up and drift
+        positions[idx] += velocities[idx] * deltaTime;
+        positions[idx + 1] += velocities[idx + 1] * deltaTime;
+        positions[idx + 2] += velocities[idx + 2] * deltaTime;
+        
+        // Grow size as they rise
+        sizes[i] += deltaTime * 0.5;
+        
+        // Reset if too high or faded out (visual trick)
+        if (positions[idx + 1] > 15) {
+          // Respawn at base
+          const r = Math.random() * 6;
+          const theta = Math.random() * Math.PI * 2;
+          positions[idx] = r * Math.cos(theta);
+          positions[idx + 1] = 0;
+          positions[idx + 2] = r * Math.sin(theta);
+          
+          // Reset size
+          sizes[i] = 1 + Math.random() * 2;
+          
+          // Random velocity
+          velocities[idx] = (Math.random() - 0.5) * 1.0; // More drift
+          velocities[idx + 1] = 1 + Math.random() * 2;   // Up speed
+          velocities[idx + 2] = (Math.random() - 0.5) * 1.0;
+        }
+      }
+      
+      this.smokeParticles.geometry.attributes.position.needsUpdate = true;
+      this.smokeParticles.geometry.attributes.size.needsUpdate = true;
+      
+      // Slowly rotate the whole smoke system
+      this.smokeParticles.rotation.y += deltaTime * 0.1;
+    }
+
+    // Animate fire particles
+    if (this.fireParticles) {
+      const positions = this.fireParticles.geometry.attributes.position.array as Float32Array;
+      const velocities = this.fireParticles.geometry.attributes.velocity.array as Float32Array;
+      const count = positions.length / 3;
+
+      for (let i = 0; i < count; i++) {
+        const idx = i * 3;
+        
+        // Move up fast
+        positions[idx] += velocities[idx] * deltaTime;
+        positions[idx + 1] += velocities[idx + 1] * deltaTime;
+        positions[idx + 2] += velocities[idx + 2] * deltaTime;
+        
+        // Reset if too high
+        if (positions[idx + 1] > 8) {
+          const r = Math.random() * 5;
+          const theta = Math.random() * Math.PI * 2;
+          positions[idx] = r * Math.cos(theta);
+          positions[idx + 1] = 0;
+          positions[idx + 2] = r * Math.sin(theta);
+          
+          // Random fast upward velocity
+          velocities[idx] = (Math.random() - 0.5) * 0.5;
+          velocities[idx + 1] = 3 + Math.random() * 4; 
+          velocities[idx + 2] = (Math.random() - 0.5) * 0.5;
+        }
+      }
+      
+      this.fireParticles.geometry.attributes.position.needsUpdate = true;
+      
+      // Flicker effect
+      if (this.fireParticles.material instanceof THREE.PointsMaterial) {
+        this.fireParticles.material.opacity = 0.6 + Math.random() * 0.4;
+      }
+    }
   }
 
   // Get holographic screen for video texture attachment
@@ -1706,6 +1789,17 @@ export class AtriumGalleryScene {
           }
         });
         console.log('✨ Special effects updated:', params.specialEvents);
+      }
+
+      // Handle ambient effects that are managed by SpecialEffectsManager
+      if (params.ambientEffects && params.ambientEffects.length > 0) {
+        params.ambientEffects.forEach(effect => {
+          // Currently only 'embers' is in Manager. 'sparkles' is handled by createAmbientParticles (partially) or could be moved here.
+          if (effect === 'embers') {
+             this.effectsManager!.addEffect('embers', params.effectIntensity || 1.0);
+             console.log('✨ Ambient effect added:', effect);
+          }
+        });
       }
     }
 
@@ -1853,11 +1947,13 @@ export class AtriumGalleryScene {
         break;
         
       case 'smoking':
-        // TODO: Implement smoke particle system
-        console.log('💨 Smoking effect (TODO: implement smoke particles)');
+        this.updateSmokeParticles(true);
+        this.updateFireParticles(false);
         break;
         
       case 'frozen':
+        this.updateSmokeParticles(false);
+        this.updateFireParticles(false);
         if (platform.material instanceof THREE.MeshStandardMaterial) {
           platform.material.color.setHex(0xB0E0E6);
           platform.material.metalness = 0.8;
@@ -1866,16 +1962,18 @@ export class AtriumGalleryScene {
         break;
         
       case 'burning':
+        this.updateSmokeParticles(true); // Smoke usually accompanies fire
+        this.updateFireParticles(true);
         if (platform.material instanceof THREE.MeshStandardMaterial) {
           platform.material.emissive.setHex(0xFF4500);
           platform.material.emissiveIntensity = 0.8;
         }
-        // TODO: Add fire particles
-        console.log('🔥 Burning effect (TODO: implement fire particles)');
         break;
         
       case 'normal':
       default:
+        this.updateSmokeParticles(false);
+        this.updateFireParticles(false);
         if (platform.material instanceof THREE.MeshStandardMaterial) {
           platform.material.emissive.setHex(0x000000);
           platform.material.emissiveIntensity = 0;
@@ -1885,6 +1983,122 @@ export class AtriumGalleryScene {
         }
         break;
     }
+  }
+
+  /**
+   * Update smoke particles
+   */
+  private updateSmokeParticles(enabled: boolean) {
+    if (!enabled) {
+      if (this.smokeParticles) {
+        this.scene.remove(this.smokeParticles);
+        this.smokeParticles.geometry.dispose();
+        if (this.smokeParticles.material instanceof THREE.Material) {
+          this.smokeParticles.material.dispose();
+        }
+        this.smokeParticles = undefined;
+      }
+      return;
+    }
+
+    if (this.smokeParticles) return; // Already exists
+
+    console.log('💨 Creating smoke particles');
+    
+    const particleCount = 200; // Reduced from 500
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    const velocities = new Float32Array(particleCount * 3);
+    const sizes = new Float32Array(particleCount);
+
+    for (let i = 0; i < particleCount; i++) {
+      // Emit from platform surface (circle radius ~8)
+      const r = Math.random() * 6;
+      const theta = Math.random() * Math.PI * 2;
+      
+      positions[i * 3] = r * Math.cos(theta);
+      positions[i * 3 + 1] = Math.random() * 2; // Start slightly above ground
+      positions[i * 3 + 2] = r * Math.sin(theta);
+
+      velocities[i * 3] = (Math.random() - 0.5) * 0.5; // Slight horizontal drift
+      velocities[i * 3 + 1] = 1 + Math.random() * 2; // Upward speed
+      velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.5;
+      
+      sizes[i] = Math.random() * 1.5 + 0.5; // Reduced size
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('velocity', new THREE.BufferAttribute(velocities, 3));
+    geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+    const material = new THREE.PointsMaterial({
+      color: 0x555555,
+      size: 1.2, // Reduced from 2
+      transparent: true,
+      opacity: 0.3, // Reduced from 0.4
+      sizeAttenuation: true,
+      depthWrite: false,
+      blending: THREE.NormalBlending
+    });
+
+    this.smokeParticles = new THREE.Points(geometry, material);
+    this.scene.add(this.smokeParticles);
+  }
+
+  /**
+   * Update fire particles
+   */
+  private updateFireParticles(enabled: boolean) {
+    if (!enabled) {
+      if (this.fireParticles) {
+        this.scene.remove(this.fireParticles);
+        this.fireParticles.geometry.dispose();
+        if (this.fireParticles.material instanceof THREE.Material) {
+          this.fireParticles.material.dispose();
+        }
+        this.fireParticles = undefined;
+      }
+      return;
+    }
+
+    if (this.fireParticles) return; // Already exists
+
+    console.log('🔥 Creating fire particles');
+
+    const particleCount = 300;
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    const velocities = new Float32Array(particleCount * 3);
+
+    for (let i = 0; i < particleCount; i++) {
+      // Emit from platform surface
+      const r = Math.random() * 5;
+      const theta = Math.random() * Math.PI * 2;
+      
+      positions[i * 3] = r * Math.cos(theta);
+      positions[i * 3 + 1] = Math.random() * 1;
+      positions[i * 3 + 2] = r * Math.sin(theta);
+
+      velocities[i * 3] = (Math.random() - 0.5) * 0.5;
+      velocities[i * 3 + 1] = 3 + Math.random() * 4; // Fast upward
+      velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.5;
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('velocity', new THREE.BufferAttribute(velocities, 3));
+
+    const material = new THREE.PointsMaterial({
+      color: 0xff4500, // Orange-Red
+      size: 0.8,
+      transparent: true,
+      opacity: 0.8,
+      sizeAttenuation: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+
+    this.fireParticles = new THREE.Points(geometry, material);
+    this.scene.add(this.fireParticles);
   }
 
   /**

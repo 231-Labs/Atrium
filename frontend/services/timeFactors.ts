@@ -378,6 +378,64 @@ class TimeFactorsService {
       timestamp: Date.now(),
     };
   }
+
+  /**
+   * Apply time-based overrides to scene parameters to ensure they match user's local time
+   * @param params Original weather params from AI
+   */
+  applyTimeOverrides(params: any): any {
+    const hour = this.getCurrentHour();
+    const timeTendency = this.getTimeBasedWeatherTendency();
+    
+    // Clone params
+    const newParams = { ...params };
+    
+    // 1. Apply Sky Color base on time (Override AI's choice to ensure Day/Night feel)
+    if (timeTendency.skyColorModifier) {
+      // Blend AI color with Time color? Or just replace?
+      // Replacing ensures the day/night cycle is respected.
+      newParams.skyColor = timeTendency.skyColorModifier;
+    }
+    
+    // 2. Adjust intensities based on time
+    if (hour >= 20 || hour < 5) {
+        // Deep Night
+        newParams.sunIntensity = 0.1; // Moon light
+        newParams.ambientIntensity = 0.2;
+        newParams.fogColor = '#0a0a1a'; // Very dark fog
+        newParams.sunColor = '#E6E6FA'; // Lavender/Moon color
+        
+        // If it was sunny, make it clear night
+        if (newParams.weatherType === 'sunny') {
+          newParams.weatherType = 'clear'; 
+        }
+    } else if (hour >= 5 && hour < 7) {
+        // Dawn
+        newParams.sunIntensity = 0.6;
+        newParams.ambientIntensity = 0.5;
+        newParams.sunColor = '#FF7F50'; // Coral sun
+    } else if (hour >= 18 && hour < 20) {
+        // Dusk
+        newParams.sunIntensity = 0.6;
+        newParams.ambientIntensity = 0.5;
+        newParams.sunColor = '#FF4500'; // Orange Red
+    } else {
+        // Day time (7-18)
+        // Ensure it's bright enough
+        newParams.sunIntensity = Math.max(newParams.sunIntensity || 1, 1.0);
+        newParams.ambientIntensity = Math.max(newParams.ambientIntensity || 0.5, 0.6);
+    }
+
+    // 3. Special handling for particles/fog density during night
+    if (hour >= 20 || hour < 5) {
+       // Night usually has less fog unless specified
+       if (newParams.weatherType === 'clear') {
+         newParams.fogDensity = Math.min(newParams.fogDensity, 0.02);
+       }
+    }
+
+    return newParams;
+  }
 }
 
 export const timeFactors = new TimeFactorsService();

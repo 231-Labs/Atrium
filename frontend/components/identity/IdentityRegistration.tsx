@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
+import { useCurrentAccount, useSignAndExecuteTransaction, useDisconnectWallet } from "@mysten/dapp-kit";
 import { uploadToWalrus } from "@/services/walrusApi";
 import { mintIdentity } from "@/utils/transactions";
 import { RetroButton } from "@/components/common/RetroButton";
@@ -16,7 +16,8 @@ interface IdentityRegistrationProps {
 export function IdentityRegistration({ onComplete }: IdentityRegistrationProps) {
   const currentAccount = useCurrentAccount();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
-  
+  const { mutate: disconnect } = useDisconnectWallet();
+
   const [step, setStep] = useState<"input" | "uploading" | "minting">("input");
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
@@ -32,9 +33,7 @@ export function IdentityRegistration({ onComplete }: IdentityRegistrationProps) 
   const [error, setError] = useState("");
 
   const handleDisconnect = () => {
-    if (typeof window !== 'undefined') {
-      window.location.reload();
-    }
+    disconnect();
   };
 
   const handleProfileImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -77,14 +76,14 @@ export function IdentityRegistration({ onComplete }: IdentityRegistrationProps) 
       // 1. Upload 3D Avatar
       setProgress("Uploading 3D Avatar to Walrus...");
       const avatarBlobId = await uploadToWalrus(avatarFile);
-      
+
       // 2. Upload Profile Image (Optional)
       let imageBlobId = "";
       if (profileImage) {
         setProgress("Uploading Profile Picture to Walrus...");
         imageBlobId = await uploadToWalrus(profileImage);
       }
-      
+
       // 3. Mint Identity
       setStep("minting");
       setProgress("Minting your Atrium Identity...");
@@ -93,17 +92,20 @@ export function IdentityRegistration({ onComplete }: IdentityRegistrationProps) 
 
       signAndExecute(
         {
-          transaction: tx,
+          transaction: tx as any,
+          chain: 'sui:testnet',
         },
         {
-          onSuccess: async (result) => {
+          onSuccess: (result) => {
+            console.log("Transaction successful:", result);
             setProgress("Identity minted successfully! Welcome to Atrium.");
             setTimeout(() => {
               onComplete();
             }, 2000);
           },
           onError: (error) => {
-            setError(`Minting failed: ${error.message}`);
+            console.error("Transaction failed:", error);
+            setError(`Minting failed: ${error.message || 'Unknown error'}`);
             setStep("input");
           },
         }
@@ -160,14 +162,14 @@ export function IdentityRegistration({ onComplete }: IdentityRegistrationProps) 
 
                 {/* Info Fields */}
                 <div className="flex-1 space-y-4">
-                  <div>
-                    <label className="block text-xs font-serif uppercase tracking-wide text-gray-600 mb-2" style={{ fontFamily: 'Georgia, serif' }}>
-                      Username *
-                    </label>
-                    <RetroInput
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
+              <div>
+                <label className="block text-xs font-serif uppercase tracking-wide text-gray-600 mb-2" style={{ fontFamily: 'Georgia, serif' }}>
+                  Username *
+                </label>
+                <RetroInput
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                       placeholder="Unique handle (e.g. neo_artist)"
                     />
                   </div>
@@ -216,12 +218,12 @@ export function IdentityRegistration({ onComplete }: IdentityRegistrationProps) 
                           </div>
                           <p className="text-sm font-serif text-gray-600 mb-1">
                             Upload your 3D character model
-                          </p>
+                        </p>
                           <p className="text-xs font-serif text-gray-500">
                             Must be a .glb file. Used in 3D spaces.
-                          </p>
-                        </div>
-                      )}
+                        </p>
+                      </div>
+                    )}
                     </div>
                   </label>
                 </RetroPanel>
@@ -254,12 +256,12 @@ export function IdentityRegistration({ onComplete }: IdentityRegistrationProps) 
                     Disconnect Wallet
                   </button>
                   <span>|</span>
-                  <button
-                    onClick={onComplete}
+                <button
+                  onClick={onComplete}
                     className="hover:text-gray-700 underline"
-                  >
-                    Skip for now
-                  </button>
+                >
+                  Skip for now
+                </button>
                 </div>
               </div>
 

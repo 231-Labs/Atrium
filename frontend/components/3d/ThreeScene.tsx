@@ -2,12 +2,13 @@
 
 import { useThreeScene } from '@/hooks/three/useThreeScene';
 import { useAIWeather } from '@/hooks/useAIWeather';
+import { timeFactors } from '@/services/timeFactors';
 import { Model3DItem, ThreeSceneApi } from '@/types/three';
 import { WeatherMode, STAGE_THEMES, STATIC_WEATHER_CONFIGS } from '@/types/theme';
 import { useEffect, useMemo, useState, forwardRef, useImperativeHandle } from 'react';
 
 interface ThreeSceneProps {
-  kioskId: string;
+  spaceId?: string;
   models?: Model3DItem[];
   enableGallery?: boolean;
   className?: string;
@@ -17,7 +18,7 @@ interface ThreeSceneProps {
 }
 
 export const ThreeScene = forwardRef<ThreeSceneApi, ThreeSceneProps>(({ 
-  kioskId, 
+  spaceId, 
   models = [], 
   enableGallery = true, 
   className = '', 
@@ -83,6 +84,12 @@ export const ThreeScene = forwardRef<ThreeSceneApi, ThreeSceneProps>(({
     if (externalWeatherParams) return externalWeatherParams;
     if (weatherMode === 'day') return STATIC_WEATHER_CONFIGS.day;
     if (weatherMode === 'night') return STATIC_WEATHER_CONFIGS.night;
+    
+    // Apply time-based overrides for dynamic mode
+    if (apiWeatherParams) {
+      return timeFactors.applyTimeOverrides(apiWeatherParams);
+    }
+    
     return apiWeatherParams;
   }, [weatherMode, externalWeatherParams, apiWeatherParams]);
 

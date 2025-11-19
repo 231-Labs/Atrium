@@ -5,10 +5,14 @@ import { SuiClientProvider, WalletProvider } from "@mysten/dapp-kit";
 import { getFullnodeUrl } from "@mysten/sui/client";
 import { useState } from "react";
 import { retroWhiteTheme } from "@/config/walletTheme";
+import { KioskClientProvider } from "@/components/providers/KioskClientProvider";
 import "@mysten/dapp-kit/dist/index.css";
 
 const networks = {
-  testnet: { url: getFullnodeUrl("testnet") },
+  testnet: {
+    url: getFullnodeUrl('testnet'),
+    websocketUrl: 'wss://fullnode.testnet.sui.io:443',
+  },
 };
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -17,10 +21,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <SuiClientProvider networks={networks} defaultNetwork="testnet">
-        <WalletProvider 
-          theme={retroWhiteTheme}
-        >
-          {children}
+        <WalletProvider theme={retroWhiteTheme}>
+          <KioskClientProvider networkName="testnet">
+            {children}
+          </KioskClientProvider>
         </WalletProvider>
       </SuiClientProvider>
     </QueryClientProvider>

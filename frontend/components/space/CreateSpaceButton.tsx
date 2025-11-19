@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import { useState, useEffect } from "react";
+import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { uploadToWalrus } from "@/services/walrusApi";
-import { initializeSpace, MIST_PER_SUI } from "@/utils/transactions";
+import { initializeSpace, MIST_PER_SUI, SUI_CHAIN } from "@/utils/transactions";
+import { PACKAGE_ID } from "@/config/sui";
 
 interface CreateSpaceButtonProps {
   onCreated: () => void;
@@ -11,9 +12,11 @@ interface CreateSpaceButtonProps {
 
 export function CreateSpaceButton({ onCreated }: CreateSpaceButtonProps) {
   const currentAccount = useCurrentAccount();
+  const suiClient = useSuiClient();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [identityId, setIdentityId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -22,8 +25,32 @@ export function CreateSpaceButton({ onCreated }: CreateSpaceButtonProps) {
     coverImage: null as File | null,
   });
 
+  useEffect(() => {
+    async function fetchIdentity() {
+      if (!currentAccount) return;
+      try {
+        const { data } = await suiClient.getOwnedObjects({
+          owner: currentAccount.address,
+          filter: { StructType: `${PACKAGE_ID}::identity::Identity` },
+          options: { showContent: true }
+        });
+        
+        if (data.length > 0) {
+          setIdentityId(data[0].data?.objectId || null);
+        }
+      } catch (e) {
+        console.error("無法獲取 Identity", e);
+      }
+    }
+    fetchIdentity();
+  }, [currentAccount, suiClient]);
+
   const handleSubmit = async () => {
     if (!currentAccount || !formData.name) return;
+    if (!identityId) {
+      alert("需要 Identity NFT 才能創建空間。請先註冊。");
+      return;
+    }
 
     try {
       setLoading(true);
@@ -50,7 +77,6 @@ export function CreateSpaceButton({ onCreated }: CreateSpaceButtonProps) {
       const initPriceInMist = 0.1 * MIST_PER_SUI;
       
       const tx = initializeSpace(
-        currentAccount.address, // TODO: Use actual identity ID
         formData.name,
         formData.description,
         coverImageBlobId,
@@ -61,7 +87,10 @@ export function CreateSpaceButton({ onCreated }: CreateSpaceButtonProps) {
       );
 
       signAndExecute(
-        { transaction: tx },
+        { 
+          transaction: tx,
+          chain: SUI_CHAIN,
+        },
         {
           onSuccess: () => {
             setIsOpen(false);
@@ -75,13 +104,13 @@ export function CreateSpaceButton({ onCreated }: CreateSpaceButtonProps) {
           },
           onError: (error) => {
             console.error("Failed to create space:", error);
-            alert(`創建失敗: ${error.message}`);
+            alert(`create space failed: ${error.message}`);
           },
         }
       );
     } catch (error: any) {
       console.error("Error:", error);
-      alert(`錯誤: ${error.message}`);
+      alert(`Create space failed: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -169,7 +198,7 @@ export function CreateSpaceButton({ onCreated }: CreateSpaceButtonProps) {
           <div className="flex gap-4">
             <button
               onClick={handleSubmit}
-              disabled={loading || !formData.name}
+              disabled={loading || !formData.name || !identityId}
               className="flex-1 py-3 px-6 rounded-lg font-medium transition-all
                 bg-gradient-header text-white shadow-lg
                 hover:shadow-xl hover:scale-105
@@ -188,6 +217,11 @@ export function CreateSpaceButton({ onCreated }: CreateSpaceButtonProps) {
           <p className="text-xs text-text-secondary">
             * 創建空間需要支付 0.1 SUI 初始化費用
           </p>
+          {!identityId && (
+            <p className="text-xs text-red-500 text-center">
+              需要 Identity NFT。請先註冊。
+            </p>
+          )}
         </div>
       </div>
     </div>

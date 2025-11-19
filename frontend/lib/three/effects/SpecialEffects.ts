@@ -54,6 +54,9 @@ export class SpecialEffectsManager {
       case 'fire_ring':
         effect = new FireRing({ scene: this.scene, camera: this.camera, intensity });
         break;
+      case 'embers':
+        effect = new Embers({ scene: this.scene, camera: this.camera, intensity });
+        break;
       default:
         console.warn(`Unknown effect type: ${type}`);
         return;
@@ -167,7 +170,7 @@ class MeteorShower extends SpecialEffect {
     }
   }
 
-  private createMeteor(): void {
+  private createMeteor(initialYOffset: number = 0): void {
     const geometry = new THREE.SphereGeometry(0.5, 8, 8);
     const material = new THREE.MeshBasicMaterial({
       color: 0xffffff,
@@ -178,17 +181,25 @@ class MeteorShower extends SpecialEffect {
 
     meteor.position.set(
       Math.random() * 200 - 100,
-      120 + Math.random() * 60, // Higher start position (was 50+50)
+      120 + Math.random() * 60 + initialYOffset, // Higher start position
       Math.random() * 200 - 100
     );
 
     const velocity = new THREE.Vector3(
-      -10 - Math.random() * 15, // Faster horizontal
-      -20 - Math.random() * 15, // Faster descent but starting higher
-      -10 - Math.random() * 15
+      -5 - Math.random() * 10, // Reduced horizontal speed slightly
+      -20 - Math.random() * 15, // Faster descent
+      -5 - Math.random() * 10
     );
     const trailGeometry = new THREE.BufferGeometry();
     const trailPositions = new Float32Array(60); // Longer trail (20 points * 3)
+    
+    // Initialize trail positions to meteor position to avoid start artifacts
+    for (let i = 0; i < trailPositions.length; i += 3) {
+        trailPositions[i] = meteor.position.x;
+        trailPositions[i+1] = meteor.position.y;
+        trailPositions[i+2] = meteor.position.z;
+    }
+
     trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
     
     const trailMaterial = new THREE.LineBasicMaterial({
@@ -199,6 +210,7 @@ class MeteorShower extends SpecialEffect {
     });
     
     const trail = new THREE.Line(trailGeometry, trailMaterial);
+    trail.position.set(0, 0, 0);
 
     this.scene.add(meteor);
     this.scene.add(trail);
@@ -210,8 +222,17 @@ class MeteorShower extends SpecialEffect {
   update(deltaTime: number): void {
     this.lifetime += deltaTime;
 
+    // Maintain meteor count (respawn)
+    const targetCount = Math.floor(5 + this.intensity * 10);
+    if (this.meteors.length < targetCount && Math.random() < 0.1) {
+        this.createMeteor(Math.random() * 20);
+    }
+
     this.meteors = this.meteors.filter(({ mesh, velocity, trail }) => {
-      // Update trail
+      // 1. Move Meteor
+      mesh.position.add(velocity.clone().multiplyScalar(deltaTime));
+
+      // 2. Update trail
       const positions = trail.geometry.attributes.position.array as Float32Array;
       // Shift positions down
       for (let i = positions.length - 3; i >= 3; i -= 3) {
@@ -219,25 +240,29 @@ class MeteorShower extends SpecialEffect {
         positions[i + 1] = positions[i - 2];
         positions[i + 2] = positions[i - 1];
       }
-      // Set new head position
+      // Set new head position (World Coordinates)
       positions[0] = mesh.position.x;
       positions[1] = mesh.position.y;
       positions[2] = mesh.position.z;
       trail.geometry.attributes.position.needsUpdate = true;
-      trail.position.copy(mesh.position); // This is actually redundant if we update vertices in world space, but keeping structure
-      // Note: trail vertices are relative to trail position if added to scene? 
-      // Wait, if trail is added to scene, and we update vertices to match mesh position which is also in scene...
-      // Actually, usually trails are in world space or relative. 
-      // Let's correct the logic: if trail.position follows mesh, vertices should be local offsets. 
-      // OR if vertices are world coords, trail.position should be 0,0,0.
-      // Existing code copied trail.position = mesh.position. 
-      // If vertices are [0,0,0, prevPos-currPos...], that works.
-      // Let's assume existing logic works but just extend length.
       
       // Check visibility height
       if (mesh.position.y < -20 || mesh.position.length() > 300) { // Lower removal threshold
         this.scene.remove(mesh);
         this.scene.remove(trail);
+        
+        // Clean up resources
+        mesh.geometry.dispose();
+        if (mesh.material instanceof THREE.Material) mesh.material.dispose();
+        trail.geometry.dispose();
+        if (trail.material instanceof THREE.Material) trail.material.dispose();
+        
+        // Remove from main objects list
+        const mIdx = this.objects.indexOf(mesh);
+        if (mIdx > -1) this.objects.splice(mIdx, 1);
+        const tIdx = this.objects.indexOf(trail);
+        if (tIdx > -1) this.objects.splice(tIdx, 1);
+
         return false;
       }
 
@@ -245,7 +270,8 @@ class MeteorShower extends SpecialEffect {
     });
 
     if (this.meteors.length === 0 && this.lifetime > 2) {
-      this.maxLifetime = this.lifetime;
+      // Only expire if we decide to stop respawning, but for now we keep going
+      // this.maxLifetime = this.lifetime; 
     }
   }
 }
@@ -257,6 +283,7 @@ class ShootingStar extends SpecialEffect {
   private stars: Array<{
     mesh: THREE.Mesh;
     velocity: THREE.Vector3;
+    trail: THREE.Line;
   }> = [];
   private spawnTimer: number = 0;
   private nextSpawnTime: number = 0;
@@ -274,13 +301,13 @@ class ShootingStar extends SpecialEffect {
   }
 
   private scheduleNextSpawn(): void {
-    // Random interval between 3 to 8 seconds for sporadic feel
-    this.nextSpawnTime = 3 + Math.random() * 5;
+    // Spawn more frequently for visibility testing (0.5 - 2.0s)
+    this.nextSpawnTime = 0.5 + Math.random() * 1.5;
     this.spawnTimer = 0;
   }
 
   private spawnStar(): void {
-    const geometry = new THREE.SphereGeometry(0.8, 8, 8);
+    const geometry = new THREE.SphereGeometry(0.8, 8, 8); // Slightly larger
     const material = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,
@@ -288,23 +315,47 @@ class ShootingStar extends SpecialEffect {
     });
     const star = new THREE.Mesh(geometry, material);
 
-    // High altitude, random position
+    // Lower altitude for better visibility (y: 30-60)
     star.position.set(
-      Math.random() * 120 - 60,
-      100 + Math.random() * 40, 
-      Math.random() * 120 - 60
+      Math.random() * 100 - 50,
+      30 + Math.random() * 30, 
+      Math.random() * 100 - 50
     );
 
-    // Fast velocity downwards and across
+    // Velocity adjusted for lower altitude
     const velocity = new THREE.Vector3(
-      -15 - Math.random() * 10,
-      -10 - Math.random() * 10,
-      -15 - Math.random() * 10
+      -10 - Math.random() * 15,
+      -5 - Math.random() * 10, // Slower descent
+      -10 - Math.random() * 15
     );
+
+    // Create Trail
+    const trailGeometry = new THREE.BufferGeometry();
+    const trailPositions = new Float32Array(45); // 15 points * 3
+    
+    // Initialize trail positions to star position to avoid start artifacts
+    for (let i = 0; i < trailPositions.length; i += 3) {
+        trailPositions[i] = star.position.x;
+        trailPositions[i+1] = star.position.y;
+        trailPositions[i+2] = star.position.z;
+    }
+
+    trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+    
+    const trailMaterial = new THREE.LineBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.4,
+      linewidth: 1,
+    });
+    
+    const trail = new THREE.Line(trailGeometry, trailMaterial);
+    trail.position.set(0, 0, 0);
 
     this.scene.add(star);
-    this.objects.push(star);
-    this.stars.push({ mesh: star, velocity });
+    this.scene.add(trail);
+    this.objects.push(star, trail);
+    this.stars.push({ mesh: star, velocity, trail });
   }
 
   update(deltaTime: number): void {
@@ -318,24 +369,48 @@ class ShootingStar extends SpecialEffect {
     }
 
     // Update existing stars
-    this.stars = this.stars.filter(({ mesh, velocity }) => {
+    this.stars = this.stars.filter(({ mesh, velocity, trail }) => {
       mesh.position.add(velocity.clone().multiplyScalar(deltaTime));
       
+      // Update trail
+      const positions = trail.geometry.attributes.position.array as Float32Array;
+      // Shift positions down
+      for (let i = positions.length - 3; i >= 3; i -= 3) {
+        positions[i] = positions[i - 3];
+        positions[i + 1] = positions[i - 2];
+        positions[i + 2] = positions[i - 1];
+      }
+      // Set new head position
+      positions[0] = mesh.position.x;
+      positions[1] = mesh.position.y;
+      positions[2] = mesh.position.z;
+      trail.geometry.attributes.position.needsUpdate = true;
+
       // Fade out based on height/lifespan approximation
-      // Simple logic: lower opacity as it drops
-      if (mesh.position.y < 80 && mesh.material instanceof THREE.MeshBasicMaterial) {
-        mesh.material.opacity = Math.max(0, (mesh.position.y + 20) / 100);
+      // Adjusted fade logic for lower altitude
+      if (mesh.position.y < 10 && mesh.material instanceof THREE.MeshBasicMaterial) {
+        const opacity = Math.max(0, (mesh.position.y + 10) / 20);
+        mesh.material.opacity = opacity;
+        if (trail.material instanceof THREE.LineBasicMaterial) {
+            trail.material.opacity = opacity * 0.4;
+        }
       }
 
       // Remove if too low or too far
       if (mesh.position.y < -20 || mesh.position.length() > 250) {
         this.scene.remove(mesh);
+        this.scene.remove(trail);
+        
         // Also remove from this.objects to prevent memory leaks in base class dispose
         const objIndex = this.objects.indexOf(mesh);
         if (objIndex > -1) this.objects.splice(objIndex, 1);
+        const trailIndex = this.objects.indexOf(trail);
+        if (trailIndex > -1) this.objects.splice(trailIndex, 1);
         
         if (mesh.geometry) mesh.geometry.dispose();
         if (mesh.material instanceof THREE.Material) mesh.material.dispose();
+        if (trail.geometry) trail.geometry.dispose();
+        if (trail.material instanceof THREE.Material) trail.material.dispose();
         
         return false;
       }
@@ -751,6 +826,100 @@ class FireRing extends SpecialEffect {
         }
       }
       this.particles.geometry.attributes.position.needsUpdate = true;
+    }
+  }
+}
+
+/**
+ * Embers effect (Rising glowing particles)
+ */
+class Embers extends SpecialEffect {
+  private particles: THREE.Points | null = null;
+
+  constructor(config: EffectConfig) {
+    super(config);
+    this.init();
+  }
+
+  init(): void {
+    const particleCount = 1000; 
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    const velocities = new Float32Array(particleCount * 3);
+    const sizes = new Float32Array(particleCount);
+
+    for (let i = 0; i < particleCount; i++) {
+      this.resetParticle(positions, velocities, sizes, i, true);
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('velocity', new THREE.BufferAttribute(velocities, 3));
+    geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+    const material = new THREE.PointsMaterial({
+      color: 0xff4500, // OrangeRed
+      size: 0.15,
+      transparent: true,
+      opacity: 0.8,
+      blending: THREE.AdditiveBlending,
+      sizeAttenuation: true,
+      depthWrite: false,
+    });
+
+    this.particles = new THREE.Points(geometry, material);
+    this.scene.add(this.particles);
+    this.objects.push(this.particles);
+  }
+
+  private resetParticle(positions: Float32Array, velocities: Float32Array, sizes: Float32Array, i: number, initial: boolean = false) {
+      const r = Math.random() * 12; // Reduced radius to keep above island (was 25)
+      const theta = Math.random() * Math.PI * 2;
+      
+      positions[i * 3] = r * Math.cos(theta);
+      positions[i * 3 + 1] = initial ? Math.random() * 20 : -2; // Start slightly below/at ground
+      positions[i * 3 + 2] = r * Math.sin(theta);
+
+      // Random drift - reduced horizontal spread
+      velocities[i * 3] = (Math.random() - 0.5) * 0.5; 
+      velocities[i * 3 + 1] = 0.5 + Math.random() * 1.5; // Upward speed
+      velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.5;
+
+      sizes[i] = Math.random() * 0.2 + 0.05;
+  }
+
+  update(deltaTime: number): void {
+    this.lifetime += deltaTime;
+
+    if (this.particles) {
+      const positions = this.particles.geometry.attributes.position.array as Float32Array;
+      const velocities = this.particles.geometry.attributes.velocity.array as Float32Array;
+      const sizes = this.particles.geometry.attributes.size.array as Float32Array;
+      
+      const count = positions.length / 3;
+
+      for (let i = 0; i < count; i++) {
+        const idx = i * 3;
+
+        // Apply turbulence
+        const turbulenceX = Math.sin(this.lifetime * 2 + positions[idx + 1] * 0.5) * 0.05;
+        const turbulenceZ = Math.cos(this.lifetime * 1.5 + positions[idx + 1] * 0.5) * 0.05;
+
+        positions[idx] += (velocities[idx] + turbulenceX) * deltaTime;
+        positions[idx + 1] += velocities[idx + 1] * deltaTime;
+        positions[idx + 2] += (velocities[idx + 2] + turbulenceZ) * deltaTime;
+
+        // Respawn if too high or too far horizontally
+        const distSq = positions[idx] * positions[idx] + positions[idx + 2] * positions[idx + 2];
+        if (positions[idx + 1] > 20 || distSq > 225) { // 15^2 = 225 (max radius check)
+             this.resetParticle(positions, velocities, sizes, i);
+        }
+      }
+      this.particles.geometry.attributes.position.needsUpdate = true;
+      
+      // Global flicker
+       if (this.particles.material instanceof THREE.PointsMaterial) {
+           this.particles.material.opacity = 0.6 + Math.sin(this.lifetime * 5) * 0.2;
+       }
     }
   }
 }

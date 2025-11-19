@@ -68,10 +68,10 @@ export function SpaceCard({ space }: SpaceCardProps) {
         <div className="flex items-center justify-between pt-3 border-t" style={{ borderColor: '#e5e7eb' }}>
           <div style={{ fontFamily: 'Georgia, serif' }}>
             <p className="text-xs text-gray-500 mb-1 uppercase tracking-wide">
-              Price
+              Creator
             </p>
-            <p className="text-base font-bold text-gray-800">
-              {(parseInt(space.subscriptionPrice) / 1_000_000_000).toFixed(2)} SUI
+            <p className="text-xs text-gray-700" style={{ fontFamily: 'Georgia, serif' }}>
+              {space.creator.slice(0, 6)}...{space.creator.slice(-4)}
             </p>
           </div>
           <RetroButton
@@ -84,22 +84,6 @@ export function SpaceCard({ space }: SpaceCardProps) {
           >
             Visit
           </RetroButton>
-        </div>
-
-        {/* Creator Info */}
-        <div 
-          className="mt-3 pt-3 border-t"
-          style={{ 
-            borderColor: '#e5e7eb',
-            fontFamily: 'Georgia, serif',
-          }}
-        >
-          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-            Creator
-          </p>
-          <p className="text-xs font-mono text-gray-700">
-            {space.creator.slice(0, 6)}...{space.creator.slice(-4)}
-          </p>
         </div>
       </div>
       </RetroPanel>

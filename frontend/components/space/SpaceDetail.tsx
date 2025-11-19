@@ -15,7 +15,7 @@ import { SpaceTabNavigation } from "./SpaceTabNavigation";
 import { getAccessStatus } from "./AccessStatusIndicator";
 import { ContentList } from "./ContentList";
 import { ContentItemData } from "./ContentItem";
-import { IDENTITY_PACKAGE_ID, SUBSCRIPTION_PACKAGE_ID } from "@/utils/transactions";
+import { PACKAGE_ID } from "@/config/sui";
 
 // Window Manager
 import { useWindowManager } from "@/components/features/window-manager";
@@ -25,7 +25,9 @@ import { EssayWindow } from "@/components/windows/EssayWindow";
 
 interface SpaceDetailProps {
   space: {
+    id: string;
     kioskId: string;
+    kioskCapId?: string; // Optional: only available for space creators
     name: string;
     description: string;
     coverImage: string;
@@ -74,6 +76,10 @@ export function SpaceDetail({ space }: SpaceDetailProps) {
   const isCreator = currentAccount?.address === space.creator;
   const accessStatus = getAccessStatus(currentAccount, isSubscribed, isCreator);
 
+  const handleEditSpace = () => {
+    router.push(`/space/${space.id}/edit`);
+  };
+
   // Define tabs based on user status
   const contentTabs = [
     { id: "merch", label: "Merch", icon: "🛍️" },
@@ -97,7 +103,7 @@ export function SpaceDetail({ space }: SpaceDetailProps) {
         // 1. Get Identity
         const { data: identityData } = await suiClient.getOwnedObjects({
           owner: currentAccount.address,
-          filter: { StructType: `${IDENTITY_PACKAGE_ID}::identity::Identity` },
+          filter: { StructType: `${PACKAGE_ID}::identity::Identity` },
         });
         
         if (identityData.length > 0) {
@@ -107,7 +113,7 @@ export function SpaceDetail({ space }: SpaceDetailProps) {
         // 2. Check Subscription
         const { data: subscriptionData } = await suiClient.getOwnedObjects({
           owner: currentAccount.address,
-          filter: { StructType: `${SUBSCRIPTION_PACKAGE_ID}::subscription::Subscription` },
+          filter: { StructType: `${PACKAGE_ID}::subscription::Subscription` },
           options: { showContent: true }
         });
 
@@ -133,10 +139,6 @@ export function SpaceDetail({ space }: SpaceDetailProps) {
 
   const handleSubscribe = () => {
     setActiveTab("merch");
-  };
-
-  const handleEditSpace = () => {
-    router.push(`/space/${space.kioskId}/edit`);
   };
 
   // Mock content data - TODO: Load from chain
@@ -336,6 +338,7 @@ export function SpaceDetail({ space }: SpaceDetailProps) {
                       </div>
                       <SubscribeButton
                         spaceKioskId={space.kioskId}
+                        spaceKioskCapId={space.kioskCapId || space.kioskId}
                         price={space.subscriptionPrice}
                         identityId={identityId}
                         onSubscribed={() => {
@@ -425,6 +428,16 @@ export function SpaceDetail({ space }: SpaceDetailProps) {
             {/* Space Info Header */}
             <div className="p-3 md:p-4 border-b flex-shrink-0" style={{ borderColor: '#d1d5db', backgroundColor: '#f9fafb' }}>
               <SpaceInfoCard space={space} />
+              {isCreator && (
+                <RetroButton
+                  variant="secondary"
+                  size="sm"
+                  className="w-full mt-3"
+                  onClick={handleEditSpace}
+                >
+                  ✏️ Edit Space
+                </RetroButton>
+              )}
             </div>
 
             {/* Content Tabs */}
@@ -471,6 +484,7 @@ export function SpaceDetail({ space }: SpaceDetailProps) {
                   </RetroButton>
                   <SubscribeButton
                     spaceKioskId={space.kioskId}
+                    spaceKioskCapId={space.kioskCapId || space.kioskId}
                     price={space.subscriptionPrice}
                     identityId={identityId}
                     onSubscribed={() => {
@@ -559,7 +573,7 @@ export function SpaceDetail({ space }: SpaceDetailProps) {
           {/* 3D Canvas */}
           <RetroFrameCanvas className="bg-gray-100">
             <ThreeScene
-              kioskId={space.kioskId}
+              spaceId={space.id}
               enableGallery={true}
               weatherMode={weatherMode}
               onWeatherModeChange={setWeatherMode}

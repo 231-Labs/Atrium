@@ -2,18 +2,19 @@
 
 import { useState } from "react";
 import { useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
-import { subscribeToSpace, MIST_PER_SUI } from "@/utils/transactions";
+import { subscribeToSpace, MIST_PER_SUI, SUI_CHAIN } from "@/utils/transactions";
 import { RetroPanel } from "@/components/common/RetroPanel";
 import { RetroButton } from "@/components/common/RetroButton";
 
 interface SubscribeButtonProps {
   spaceKioskId: string;
+  spaceKioskCapId: string; // Added this
   price: string;
   identityId: string | null;
   onSubscribed: () => void;
 }
 
-export function SubscribeButton({ spaceKioskId, price, identityId, onSubscribed }: SubscribeButtonProps) {
+export function SubscribeButton({ spaceKioskId, spaceKioskCapId, price, identityId, onSubscribed }: SubscribeButtonProps) {
   const currentAccount = useCurrentAccount();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const [loading, setLoading] = useState(false);
@@ -41,7 +42,10 @@ export function SubscribeButton({ spaceKioskId, price, identityId, onSubscribed 
       );
 
       signAndExecute(
-        { transaction: tx },
+        { 
+          transaction: tx,
+          chain: SUI_CHAIN,
+        },
         {
           onSuccess: () => {
             alert("Subscription successful!");

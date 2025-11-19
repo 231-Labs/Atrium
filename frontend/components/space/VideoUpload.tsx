@@ -4,14 +4,15 @@ import { useState } from "react";
 import { useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
 import { encryptVideo } from "@/services/sealVideo";
 import { uploadToWalrus } from "@/services/walrusApi";
-import { addVideo } from "@/utils/transactions";
+import { addVideo, SUI_CHAIN } from "@/utils/transactions";
 
 interface VideoUploadProps {
   spaceKioskId: string;
+  kioskCapId: string;
   onUploaded: (blobId: string) => void;
 }
 
-export function VideoUpload({ spaceKioskId, onUploaded }: VideoUploadProps) {
+export function VideoUpload({ spaceKioskId, kioskCapId, onUploaded }: VideoUploadProps) {
   const currentAccount = useCurrentAccount();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const [file, setFile] = useState<File | null>(null);
@@ -44,7 +45,7 @@ export function VideoUpload({ spaceKioskId, onUploaded }: VideoUploadProps) {
         file,
         {
           spaceKioskId,
-          videoTitle: title,
+          title,
         },
         userAddress,
         signFn
@@ -58,14 +59,15 @@ export function VideoUpload({ spaceKioskId, onUploaded }: VideoUploadProps) {
       setProgress("更新空間配置...");
       const tx = addVideo(
         spaceKioskId,
-        "", // TODO: Get actual kiosk cap
-        title,
-        blobId,
-        encrypted.resourceId || ""
+        kioskCapId,
+        blobId
       );
 
       signAndExecute(
-        { transaction: tx },
+        { 
+          transaction: tx,
+          chain: SUI_CHAIN,
+        },
         {
           onSuccess: () => {
             setProgress("上傳成功！");

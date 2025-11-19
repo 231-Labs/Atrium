@@ -2,7 +2,7 @@
 
 import { RetroButton } from "@/components/common/RetroButton";
 
-export type SpaceCategory = "all" | "art" | "gaming" | "music" | "tech" | "social" | "portfolio" | "other";
+export type SpaceCategory = "all" | "art" | "gaming" | "music" | "tech" | "crypto" | "social" | "portfolio" | "other";
 
 interface SpaceData {
   category: SpaceCategory;
@@ -22,6 +22,7 @@ export function SpaceCategoryFilter({ selectedCategory, onCategoryChange, spaces
     gaming: "Gaming",
     music: "Music",
     tech: "Tech",
+    crypto: "Crypto",
     social: "Social",
     portfolio: "Portfolio",
     other: "Other",
@@ -34,7 +35,7 @@ export function SpaceCategoryFilter({ selectedCategory, onCategoryChange, spaces
   }, {} as Record<SpaceCategory, number>);
 
   // All categories except "all"
-  const allFilterCategories: SpaceCategory[] = ["art", "gaming", "music", "tech", "social", "portfolio", "other"];
+  const allFilterCategories: SpaceCategory[] = ["art", "gaming", "music", "tech", "crypto", "social", "portfolio", "other"];
   
   // Only show categories that have items
   const availableCategories = allFilterCategories.filter(category => 

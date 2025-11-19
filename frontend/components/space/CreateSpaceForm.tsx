@@ -6,7 +6,8 @@ import { RetroPanel } from "@/components/common/RetroPanel";
 import { RetroButton } from "@/components/common/RetroButton";
 import { SpaceCategory } from "@/components/space/SpaceCategoryFilter";
 import { uploadToWalrus } from "@/services/walrusApi";
-import { initializeSpace, MIST_PER_SUI, IDENTITY_PACKAGE_ID } from "@/utils/transactions";
+import { initializeSpace, MIST_PER_SUI, SUI_CHAIN } from "@/utils/transactions";
+import { PACKAGE_ID } from "@/config/sui";
 
 interface CreateSpaceFormData {
   name: string;
@@ -42,7 +43,7 @@ export function CreateSpaceForm({ onClose, onCreated }: CreateSpaceFormProps) {
       try {
         const { data } = await suiClient.getOwnedObjects({
           owner: currentAccount.address,
-          filter: { StructType: `${IDENTITY_PACKAGE_ID}::identity::Identity` },
+          filter: { StructType: `${PACKAGE_ID}::identity::Identity` },
           options: { showContent: true }
         });
         
@@ -62,6 +63,7 @@ export function CreateSpaceForm({ onClose, onCreated }: CreateSpaceFormProps) {
     { value: "gaming", label: "Gaming" },
     { value: "music", label: "Music" },
     { value: "tech", label: "Technology" },
+    { value: "crypto", label: "Crypto" },
     { value: "social", label: "Social" },
     { value: "portfolio", label: "Portfolio" },
     { value: "other", label: "Other" },
@@ -69,10 +71,6 @@ export function CreateSpaceForm({ onClose, onCreated }: CreateSpaceFormProps) {
 
   const handleSubmit = async () => {
     if (!currentAccount || !formData.name) return;
-    if (!identityId) {
-      alert("You need an Identity NFT to create a space. Please register first.");
-      return;
-    }
 
     try {
       setLoading(true);
@@ -106,7 +104,6 @@ export function CreateSpaceForm({ onClose, onCreated }: CreateSpaceFormProps) {
       const initPriceInMist = 0.1 * MIST_PER_SUI;
       
       const tx = initializeSpace(
-        identityId,
         formData.name,
         formData.description,
         coverImageBlobId,
@@ -117,7 +114,10 @@ export function CreateSpaceForm({ onClose, onCreated }: CreateSpaceFormProps) {
       );
 
       signAndExecute(
-        { transaction: tx },
+        { 
+          transaction: tx,
+          chain: SUI_CHAIN,
+        },
         {
           onSuccess: () => {
             handleClose();
@@ -211,18 +211,39 @@ export function CreateSpaceForm({ onClose, onCreated }: CreateSpaceFormProps) {
 
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-2 uppercase tracking-wide" style={{ fontFamily: 'Georgia, serif' }}>
-              Tags (comma separated)
+              Tags
             </label>
-            <RetroPanel variant="inset" className="p-0">
-              <input
-                type="text"
-                value={formData.tags}
-                onChange={(e) => updateFormData({ tags: e.target.value })}
-                className="w-full px-3 py-2 bg-transparent border-0 outline-none"
-                style={{ fontFamily: 'Georgia, serif' }}
-                placeholder="3d, art, interactive"
-              />
-            </RetroPanel>
+            <div className="flex flex-wrap gap-2">
+              {categoryOptions.filter(opt => opt.value !== formData.category).map(option => {
+                const isSelected = formData.tags.split(',').map(t => t.trim()).includes(option.value);
+                return (
+                  <RetroButton
+                    key={option.value}
+                    variant={isSelected ? "primary" : "secondary"}
+                    size="sm"
+                    onClick={() => {
+                      const currentTags = formData.tags.split(',').map(t => t.trim()).filter(Boolean);
+                      if (isSelected) {
+                        // Remove tag
+                        const newTags = currentTags.filter(t => t !== option.value);
+                        updateFormData({ tags: newTags.join(', ') });
+                      } else {
+                        // Add tag
+                        const newTags = [...currentTags, option.value];
+                        updateFormData({ tags: newTags.join(', ') });
+                      }
+                    }}
+                  >
+                    {option.label}
+                  </RetroButton>
+                );
+              })}
+            </div>
+            {formData.tags && (
+              <p className="text-xs text-gray-500 mt-2" style={{ fontFamily: 'Georgia, serif' }}>
+                Selected: {formData.tags}
+              </p>
+            )}
           </div>
 
           <div>
