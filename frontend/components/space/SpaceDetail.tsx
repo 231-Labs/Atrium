@@ -16,6 +16,7 @@ import { getAccessStatus } from "./AccessStatusIndicator";
 import { ContentList } from "./ContentList";
 import { ContentItemData } from "./ContentItem";
 import { PACKAGE_ID } from "@/config/sui";
+import { LandingPageView } from "@/components/space/LandingPageView";
 
 // Window Manager
 import { useWindowManager } from "@/components/features/window-manager";
@@ -24,10 +25,10 @@ import { VideoWindow } from "@/components/windows/VideoWindow";
 import { EssayWindow } from "@/components/windows/EssayWindow";
 
 interface SpaceDetailProps {
-  space: {
+  space?: {
     id: string;
     kioskId: string;
-    kioskCapId?: string; // Optional: only available for space creators
+    kioskCapId?: string;
     name: string;
     description: string;
     coverImage: string;
@@ -36,18 +37,38 @@ interface SpaceDetailProps {
     creator: string;
     videoBlobs: string[];
   };
+  isLoading?: boolean;
+  spaceId?: string;
 }
 
-export function SpaceDetail({ space }: SpaceDetailProps) {
+export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailProps) {
   const router = useRouter();
   const currentAccount = useCurrentAccount();
   const suiClient = useSuiClient();
+
+  // Safety check for missing data when not loading
+  if (!isLoading && !space) return null;
+
+  // Create safe space object with defaults or loaded data
+  const safeSpace = space || {
+    id: spaceId || "",
+    kioskId: spaceId || "",
+    name: "Loading Space...",
+    description: "Please wait while we load the space content.",
+    coverImage: "",
+    configQuilt: "",
+    subscriptionPrice: "0",
+    creator: "",
+    videoBlobs: []
+  };
+
   const [activeTab, setActiveTab] = useState<"merch" | "video" | "essay" | "subscribe">("merch");
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [identityId, setIdentityId] = useState<string | null>(null);
   const [isContentMenuOpen, setIsContentMenuOpen] = useState(false);
   const [showSubscribeForm, setShowSubscribeForm] = useState(false);
   const [weatherMode, setWeatherMode] = useState<WeatherMode>('dynamic');
+  const [viewMode, setViewMode] = useState<'3d' | 'landing'>('3d');
 
   // Window Manager
   const {
@@ -73,11 +94,11 @@ export function SpaceDetail({ space }: SpaceDetailProps) {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  const isCreator = currentAccount?.address === space.creator;
+  const isCreator = currentAccount?.address === safeSpace.creator;
   const accessStatus = getAccessStatus(currentAccount, isSubscribed, isCreator);
 
   const handleEditSpace = () => {
-    router.push(`/space/${space.id}/edit`);
+    router.push(`/space/${safeSpace.id}/edit`);
   };
 
   // Define tabs based on user status
@@ -97,7 +118,7 @@ export function SpaceDetail({ space }: SpaceDetailProps) {
   // Fetch Identity and Subscription Status
   useEffect(() => {
     async function checkStatus() {
-      if (!currentAccount) return;
+      if (!currentAccount || !safeSpace.kioskId) return;
 
       try {
         // 1. Get Identity
@@ -120,7 +141,7 @@ export function SpaceDetail({ space }: SpaceDetailProps) {
         // Filter for subscription to this specific space kiosk
         const hasSubscription = subscriptionData.some(sub => {
           const content = sub.data?.content as any;
-          return content?.fields?.space_kiosk_id === space.kioskId;
+          return content?.fields?.space_kiosk_id === safeSpace.kioskId;
         });
 
         setIsSubscribed(hasSubscription);
@@ -131,7 +152,7 @@ export function SpaceDetail({ space }: SpaceDetailProps) {
     }
 
     checkStatus();
-  }, [currentAccount, suiClient, space.kioskId]);
+  }, [currentAccount, suiClient, safeSpace.kioskId]);
 
   const handleJoinAtrium = () => {
     router.push("/");
@@ -243,8 +264,8 @@ export function SpaceDetail({ space }: SpaceDetailProps) {
   };
 
   const handleShare = async () => {
-    const shareUrl = `${window.location.origin}/space/${space.kioskId}`;
-    const shareText = `✨ ${space.name}\n\n${space.description}\n\n🔗 ${shareUrl}`;
+    const shareUrl = `${window.location.origin}/space/${safeSpace.kioskId}`;
+    const shareText = `✨ ${safeSpace.name}\n\n${safeSpace.description}\n\n🔗 ${shareUrl}`;
     
     try {
       await navigator.clipboard.writeText(shareText);
@@ -258,20 +279,16 @@ export function SpaceDetail({ space }: SpaceDetailProps) {
   return (
     <div className="h-screen bg-gray-100 flex flex-col overflow-hidden" style={{ fontFamily: 'Georgia, serif' }}>
       
-      {/* Windows Layer */}
+      {/* Windows Layer - Only relevant in 3D mode or overlaying Landing Page */}
       {Object.values(windows)
         .filter(window => {
-          // 手機版只顯示當前激活的視窗，避免多個全屏視窗重疊
           if (isMobile) {
             return window.id === activeWindowId;
           }
-          // 桌面版顯示所有視窗
           return true;
         })
         .map(window => {
-          // Determine content for window based on type
           let content = null;
-
           if (window.type === 'video-player') {
             content = (
               <VideoWindow 
@@ -315,216 +332,215 @@ export function SpaceDetail({ space }: SpaceDetailProps) {
         })
       }
 
-      {/* Main Content Area - Full Height */}
+      {/* Main Content Area */}
       <div className="flex flex-col-reverse lg:flex-row flex-1 overflow-hidden">
         
-        {/* Mobile: Bottom Navigation Bar - Hidden on Desktop */}
-        <div className="lg:hidden flex-shrink-0" style={{ borderColor: '#d1d5db' }}>
-          <RetroPanel variant="outset" className="rounded-none">
-            {/* Expandable Content Panel - Above buttons */}
-            {isContentMenuOpen && (
-              <div 
-                className="max-h-72 overflow-y-auto scrollbar-hidden border-b bg-white"
-                style={{ borderColor: '#d1d5db' }}
-              >
-                <div className="p-2.5">
-                  {activeTab === "subscribe" ? (
-                    /* Subscribe Form */
-                    <div>
-                      <div className="text-center mb-2">
-                        <span className="text-xs text-gray-700 font-medium" style={{ fontFamily: 'Georgia, serif' }}>
-                          🔒 Subscribe to unlock premium content
-                        </span>
+        {/* Mobile: Bottom Navigation Bar - Only in 3D mode */}
+        {viewMode === '3d' && (
+          <div className="lg:hidden flex-shrink-0" style={{ borderColor: '#d1d5db' }}>
+            <RetroPanel variant="outset" className="rounded-none">
+              {/* Expandable Content Panel */}
+              {isContentMenuOpen && (
+                <div 
+                  className="max-h-72 overflow-y-auto scrollbar-hidden border-b bg-white"
+                  style={{ borderColor: '#d1d5db' }}
+                >
+                  <div className="p-2.5">
+                    {activeTab === "subscribe" ? (
+                      <div>
+                        <div className="text-center mb-2">
+                          <span className="text-xs text-gray-700 font-medium" style={{ fontFamily: 'Georgia, serif' }}>
+                            🔒 Subscribe to unlock premium content
+                          </span>
+                        </div>
+                        <SubscribeButton
+                          spaceKioskId={safeSpace.kioskId}
+                          spaceKioskCapId={safeSpace.kioskCapId || safeSpace.kioskId}
+                          price={safeSpace.subscriptionPrice}
+                          identityId={identityId}
+                          onSubscribed={() => {
+                            setIsSubscribed(true);
+                            setActiveTab("merch");
+                            setIsContentMenuOpen(false);
+                          }}
+                        />
                       </div>
-                      <SubscribeButton
-                        spaceKioskId={space.kioskId}
-                        spaceKioskCapId={space.kioskCapId || space.kioskId}
-                        price={space.subscriptionPrice}
-                        identityId={identityId}
-                        onSubscribed={() => {
-                          setIsSubscribed(true);
-                          setActiveTab("merch");
+                    ) : !currentAccount ? (
+                      <div className="text-center py-4">
+                        <div className="text-3xl mb-2">👀</div>
+                        <p className="text-xs text-gray-700 mb-3" style={{ fontFamily: 'Georgia, serif' }}>
+                          Join Atrium to subscribe and unlock content
+                        </p>
+                        <RetroButton
+                          onClick={() => {
+                            handleJoinAtrium();
+                            setIsContentMenuOpen(false);
+                          }}
+                          variant="primary"
+                          size="sm"
+                          className="w-full"
+                        >
+                          Join Atrium
+                        </RetroButton>
+                      </div>
+                    ) : (
+                      <ContentList
+                        items={contentItems}
+                        type={activeTab as "merch" | "video" | "essay"}
+                        isSubscribed={isSubscribed}
+                        isCreator={isCreator}
+                        onUnlock={(itemId) => {
+                          handleUnlockContent(itemId);
+                          setIsContentMenuOpen(false);
+                        }}
+                        onView={(itemId) => {
+                          handleViewContent(itemId);
                           setIsContentMenuOpen(false);
                         }}
                       />
-                    </div>
-                  ) : !currentAccount ? (
-                    /* Guest Join Prompt */
-                    <div className="text-center py-4">
-                      <div className="text-3xl mb-2">👀</div>
-                      <p className="text-xs text-gray-700 mb-3" style={{ fontFamily: 'Georgia, serif' }}>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Fixed Button Row */}
+              <div className="flex" style={{ borderColor: '#d1d5db' }}>
+                {tabs.map((tab) => (
+                  <div 
+                    key={tab.id}
+                    className="flex-1 border-r last:border-r-0"
+                    style={{ borderColor: '#d1d5db' }}
+                  >
+                    <RetroButton
+                      onClick={() => {
+                        if (activeTab === tab.id) {
+                          setIsContentMenuOpen(!isContentMenuOpen);
+                        } else {
+                          setActiveTab(tab.id as "merch" | "video" | "essay" | "subscribe");
+                          setIsContentMenuOpen(true);
+                        }
+                      }}
+                      variant={activeTab === tab.id ? "primary" : "secondary"}
+                      size="sm"
+                      className="w-full rounded-none"
+                    >
+                      <div className="flex flex-col items-center py-1">
+                        <span className="text-base mb-0.5">{tab.icon}</span>
+                        <span className="text-xs" style={{ fontFamily: 'Georgia, serif' }}>
+                          {tab.label}
+                        </span>
+                      </div>
+                    </RetroButton>
+                  </div>
+                ))}
+              </div>
+            </RetroPanel>
+          </div>
+        )}
+
+        {/* Desktop: Sidebar - Hidden in Landing Mode */}
+        {viewMode === '3d' && (
+          <div className="hidden lg:flex w-80 flex-shrink-0 border-r h-full" style={{ borderColor: '#d1d5db' }}>
+            <div className="h-full flex flex-col bg-white w-full">
+              {/* Space Info Header */}
+              <div className="p-3 md:p-4 border-b flex-shrink-0" style={{ borderColor: '#d1d5db', backgroundColor: '#f9fafb' }}>
+                {isLoading ? (
+                  <div className="space-y-3 animate-pulse">
+                    <div className="h-40 bg-gray-200 rounded w-full"></div>
+                    <div className="h-6 bg-gray-200 rounded w-3/4"></div>
+                  </div>
+                ) : (
+                  <>
+                    <SpaceInfoCard space={safeSpace} />
+                  </>
+                )}
+              </div>
+
+              {/* Content Tabs */}
+              <div className="px-3 py-2 border-b flex-shrink-0" style={{ borderColor: '#d1d5db' }}>
+                <SpaceTabNavigation 
+                  tabs={contentTabs}
+                  activeTab={showSubscribeForm ? "" : (activeTab === "subscribe" ? "merch" : activeTab)}
+                  onTabChange={(tabId) => {
+                    if (isLoading) return;
+                    setShowSubscribeForm(false);
+                    setActiveTab(tabId as "merch" | "video" | "essay");
+                  }}
+                />
+              </div>
+
+              {/* Content List */}
+              <div className="flex-1 min-w-0 overflow-y-auto scrollbar-hidden p-2 md:p-3 bg-white">
+                {isLoading ? (
+                   <div className="space-y-3">
+                     {[1, 2, 3].map(i => (
+                       <div key={i} className="border p-3 animate-pulse" />
+                     ))}
+                   </div>
+                ) : !currentAccount ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center py-8">
+                      <div className="text-5xl mb-4">👀</div>
+                      <p className="text-sm text-gray-700 mb-6" style={{ fontFamily: 'Georgia, serif' }}>
                         Join Atrium to subscribe and unlock content
                       </p>
+                      <RetroButton onClick={handleJoinAtrium} variant="primary" size="md">
+                        Join Atrium
+                      </RetroButton>
+                    </div>
+                  </div>
+                ) : showSubscribeForm ? (
+                  <div className="space-y-3">
+                    <RetroButton
+                      onClick={() => setShowSubscribeForm(false)}
+                      variant="secondary"
+                      size="sm"
+                      className="w-full"
+                    >
+                      ← Back to Content
+                    </RetroButton>
+                    <SubscribeButton
+                      spaceKioskId={safeSpace.kioskId}
+                      spaceKioskCapId={safeSpace.kioskCapId || safeSpace.kioskId}
+                      price={safeSpace.subscriptionPrice}
+                      identityId={identityId}
+                      onSubscribed={() => {
+                        setIsSubscribed(true);
+                        setShowSubscribeForm(false);
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {!isSubscribed && !isCreator && (
                       <RetroButton
-                        onClick={() => {
-                          handleJoinAtrium();
-                          setIsContentMenuOpen(false);
-                        }}
+                        onClick={() => setShowSubscribeForm(true)}
                         variant="primary"
                         size="sm"
                         className="w-full"
                       >
-                        Join Atrium
+                        🔒 Subscribe to Unlock Premium Content
                       </RetroButton>
-                    </div>
-                  ) : (
-                    /* Content List */
+                    )}
+                    
                     <ContentList
                       items={contentItems}
-                      type={activeTab as "merch" | "video" | "essay"}
+                      type={activeTab === "subscribe" ? "merch" : (activeTab as "merch" | "video" | "essay")}
                       isSubscribed={isSubscribed}
                       isCreator={isCreator}
-                      onUnlock={(itemId) => {
-                        handleUnlockContent(itemId);
-                        setIsContentMenuOpen(false);
-                      }}
-                      onView={(itemId) => {
-                        handleViewContent(itemId);
-                        setIsContentMenuOpen(false);
-                      }}
+                      onUnlock={handleUnlockContent}
+                      onView={handleViewContent}
                     />
-                  )}
-                </div>
-              </div>
-            )}
-            
-            {/* Fixed Button Row */}
-            <div className="flex" style={{ borderColor: '#d1d5db' }}>
-              {tabs.map((tab) => (
-                <div 
-                  key={tab.id}
-                  className="flex-1 border-r last:border-r-0"
-                  style={{ borderColor: '#d1d5db' }}
-                >
-                  <RetroButton
-                    onClick={() => {
-                      if (activeTab === tab.id) {
-                        setIsContentMenuOpen(!isContentMenuOpen);
-                      } else {
-                        setActiveTab(tab.id as "merch" | "video" | "essay" | "subscribe");
-                        setIsContentMenuOpen(true);
-                      }
-                    }}
-                    variant={activeTab === tab.id ? "primary" : "secondary"}
-                    size="sm"
-                    className="w-full rounded-none"
-                  >
-                    <div className="flex flex-col items-center py-1">
-                      <span className="text-base mb-0.5">{tab.icon}</span>
-                      <span className="text-xs" style={{ fontFamily: 'Georgia, serif' }}>
-                        {tab.label}
-                      </span>
-                    </div>
-                  </RetroButton>
-                </div>
-              ))}
-            </div>
-          </RetroPanel>
-        </div>
-
-        {/* Desktop: Sidebar - Full Height */}
-        <div className="hidden lg:flex w-80 flex-shrink-0 border-r h-full" style={{ borderColor: '#d1d5db' }}>
-          <div className="h-full flex flex-col bg-white w-full">
-            {/* Space Info Header */}
-            <div className="p-3 md:p-4 border-b flex-shrink-0" style={{ borderColor: '#d1d5db', backgroundColor: '#f9fafb' }}>
-              <SpaceInfoCard space={space} />
-              {isCreator && (
-                <RetroButton
-                  variant="secondary"
-                  size="sm"
-                  className="w-full mt-3"
-                  onClick={handleEditSpace}
-                >
-                  ✏️ Edit Space
-                </RetroButton>
-              )}
-            </div>
-
-            {/* Content Tabs */}
-            <div className="px-3 py-2 border-b flex-shrink-0" style={{ borderColor: '#d1d5db' }}>
-              <SpaceTabNavigation 
-                tabs={contentTabs}
-                activeTab={showSubscribeForm ? "" : (activeTab === "subscribe" ? "merch" : activeTab)}
-                onTabChange={(tabId) => {
-                  setShowSubscribeForm(false);
-                  setActiveTab(tabId as "merch" | "video" | "essay");
-                }}
-              />
-            </div>
-
-            {/* Content List */}
-            <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hidden p-2 md:p-3 bg-white">
-              {!currentAccount ? (
-                /* Guest View */
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center py-8">
-                    <div className="text-5xl mb-4">👀</div>
-                    <p className="text-sm text-gray-700 mb-6" style={{ fontFamily: 'Georgia, serif' }}>
-                      Join Atrium to subscribe and unlock content
-                    </p>
-                    <RetroButton
-                      onClick={handleJoinAtrium}
-                      variant="primary"
-                      size="md"
-                    >
-                      Join Atrium
-                    </RetroButton>
                   </div>
-                </div>
-              ) : showSubscribeForm ? (
-                /* Subscribe Form View */
-                <div className="space-y-3">
-                  <RetroButton
-                    onClick={() => setShowSubscribeForm(false)}
-                    variant="secondary"
-                    size="sm"
-                    className="w-full"
-                  >
-                    ← Back to Content
-                  </RetroButton>
-                  <SubscribeButton
-                    spaceKioskId={space.kioskId}
-                    spaceKioskCapId={space.kioskCapId || space.kioskId}
-                    price={space.subscriptionPrice}
-                    identityId={identityId}
-                    onSubscribed={() => {
-                      setIsSubscribed(true);
-                      setShowSubscribeForm(false);
-                    }}
-                  />
-                </div>
-              ) : (
-                /* Content List View */
-                <div className="space-y-3">
-                  {/* Subscribe Button for Desktop */}
-                  {!isSubscribed && !isCreator && (
-                    <RetroButton
-                      onClick={() => setShowSubscribeForm(true)}
-                      variant="primary"
-                      size="sm"
-                      className="w-full"
-                    >
-                      🔒 Subscribe to Unlock Premium Content
-                    </RetroButton>
-                  )}
-                  
-                  <ContentList
-                    items={contentItems}
-                    type={activeTab === "subscribe" ? "merch" : (activeTab as "merch" | "video" | "essay")}
-                    isSubscribed={isSubscribed}
-                    isCreator={isCreator}
-                    onUnlock={handleUnlockContent}
-                    onView={handleViewContent}
-                  />
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* 3D Scene Area */}
+        {/* Right Area: 3D Scene OR Landing Page */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Header Bar - Compact on Mobile */}
+          {/* Header Bar */}
           <div className="px-2 py-1.5 lg:px-3 lg:py-2 border-b flex-shrink-0" style={{ borderColor: '#d1d5db', backgroundColor: '#f9fafb' }}>
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
@@ -537,48 +553,67 @@ export function SpaceDetail({ space }: SpaceDetailProps) {
                   ←
                 </RetroButton>
                 <div className="min-w-0">
-                  <h1 className="text-sm lg:text-base font-bold text-gray-800 truncate" style={{ fontFamily: 'Georgia, serif' }}>
-                    {space.name}
-                  </h1>
+                  {isLoading ? (
+                    <div className="h-5 w-32 bg-gray-200 rounded animate-pulse"></div>
+                  ) : (
+                    <h1 className="text-sm lg:text-base font-bold text-gray-800 truncate" style={{ fontFamily: 'Georgia, serif' }}>
+                      {safeSpace.name}
+                    </h1>
+                  )}
                 </div>
               </div>
               
               <div className="flex items-center gap-2 flex-shrink-0">
-                <WeatherModeToggle currentMode={weatherMode} onModeChange={setWeatherMode} />
-                
-                <div className="h-6 w-px bg-gray-300" />
+                {/* View Toggle */}
+                <RetroButton
+                   onClick={() => setViewMode(viewMode === '3d' ? 'landing' : '3d')}
+                   variant="secondary"
+                   size="sm"
+                 >
+                   {viewMode === '3d' ? '📖 Landing View' : '🏛️ 3D View'}
+                 </RetroButton>
+              
+                {viewMode === '3d' && (
+                  <>
+                    <WeatherModeToggle currentMode={weatherMode} onModeChange={setWeatherMode} />
+                    <div className="h-6 w-px bg-gray-300" />
+                  </>
+                )}
                 
                 <RetroButton
                   onClick={handleShare}
                   variant="secondary"
                   size="sm"
                   title="Share this space"
+                  disabled={isLoading}
                 >
                   📤
                 </RetroButton>
-                {isCreator && (
-                  <RetroButton
-                    onClick={handleEditSpace}
-                    variant="primary"
-                    size="sm"
-                    className="hidden lg:inline-flex"
-                  >
-                    Edit
-                  </RetroButton>
-                )}
               </div>
             </div>
           </div>
           
-          {/* 3D Canvas */}
-          <RetroFrameCanvas className="bg-gray-100">
-            <ThreeScene
-              spaceId={space.id}
-              enableGallery={true}
-              weatherMode={weatherMode}
-              onWeatherModeChange={setWeatherMode}
+          {/* Content */}
+          {viewMode === '3d' ? (
+            <RetroFrameCanvas className="bg-gray-100">
+              <ThreeScene
+                spaceId={safeSpace.id}
+                enableGallery={true}
+                weatherMode={weatherMode}
+                onWeatherModeChange={setWeatherMode}
+              />
+            </RetroFrameCanvas>
+          ) : (
+            <LandingPageView 
+              space={safeSpace}
+              contentItems={contentItems}
+              isSubscribed={isSubscribed}
+              isCreator={isCreator}
+              onUnlock={handleUnlockContent}
+              onView={handleViewContent}
+              onUpload={isCreator ? handleEditSpace : undefined}
             />
-          </RetroFrameCanvas>
+          )}
 
         </div>
       </div>

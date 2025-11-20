@@ -210,6 +210,12 @@ export function useThreeScene(options: UseThreeSceneOptions = {}) {
     return sceneManagerRef.current?.getSceneState() || [];
   }, []);
 
+  const playIntroAnimation = useCallback(async (options?: { duration?: number; startDistanceMultiplier?: number; startHeightOffset?: number }) => {
+    if (sceneManagerRef.current) {
+      await sceneManagerRef.current.playIntroAnimation(options);
+    }
+  }, []);
+
   return {
     canvasRef,
     sceneManager: sceneManagerRef.current || undefined,
@@ -231,6 +237,7 @@ export function useThreeScene(options: UseThreeSceneOptions = {}) {
     setTransformMode,
     pickObject,
     getSceneState,
+    playIntroAnimation,
   };
 }
 

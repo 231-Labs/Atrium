@@ -232,12 +232,88 @@ const TEST_SCENARIOS: Record<string, SceneWeatherParams> = {
     reasoning: 'Test: Turbulent ocean with low energy',
     timestamp: Date.now(),
   },
+
+  '❄️ Snowfall + Birds': {
+    skyColor: '#E0F7FF',
+    fogDensity: 0.3,
+    fogColor: '#FFFFFF',
+    sunIntensity: 0.8,
+    sunColor: '#FFFFFF',
+    ambientIntensity: 0.6,
+    weatherType: 'snowy',
+    particleIntensity: 0.5,
+    windSpeed: 2,
+    cloudSpeed: 1,
+    mood: 'calm',
+    waterEffect: 'calm',
+    waterColor: '#B0E0E6',
+    specialEvents: ['none'],
+    islandState: 'frozen',
+    ambientEffects: ['snowfall', 'birds_flying'],
+    effectIntensity: 0.6,
+    fishCount: 15,
+    floatingOrbCount: 10,
+    energyBeamIntensity: 0.3,
+    reasoning: 'Test: Peaceful winter scene with birds',
+    timestamp: Date.now(),
+  },
+
+  '🌫️ Mystical Fog + Dust': {
+    skyColor: '#D4DCE8',
+    fogDensity: 0.8, // Heavy fog
+    fogColor: '#B0C4DE',
+    sunIntensity: 0.3,
+    sunColor: '#B0C4DE',
+    ambientIntensity: 0.4,
+    weatherType: 'foggy',
+    particleIntensity: 0.4,
+    windSpeed: 1,
+    cloudSpeed: 0.5,
+    mood: 'mysterious',
+    waterEffect: 'calm',
+    waterColor: '#708090',
+    specialEvents: ['none'],
+    islandState: 'normal',
+    ambientEffects: ['dust_particles', 'sparkles'],
+    effectIntensity: 0.5,
+    fishCount: 5,
+    floatingOrbCount: 20,
+    energyBeamIntensity: 0.1,
+    reasoning: 'Test: Heavy fog with floating dust and sparkles',
+    timestamp: Date.now(),
+  },
+
+  '🎉 Celebration / All Time High': {
+    skyColor: '#87CEFA', // Light Sky Blue
+    fogDensity: 0.05,
+    fogColor: '#FFFFFF',
+    sunIntensity: 1.5,
+    sunColor: '#FFD700',
+    ambientIntensity: 0.8,
+    weatherType: 'sunny',
+    particleIntensity: 0.2,
+    windSpeed: 2,
+    cloudSpeed: 1,
+    mood: 'energetic',
+    waterEffect: 'ripples',
+    waterColor: '#00BFFF',
+    specialEvents: ['rainbow'],
+    islandState: 'glowing',
+    ambientEffects: ['confetti', 'sparkles'],
+    effectIntensity: 1.0,
+    fishCount: 100,
+    floatingOrbCount: 30,
+    energyBeamIntensity: 1.0,
+    reasoning: 'Test: All Time High celebration!',
+    timestamp: Date.now(),
+  },
 };
 
 export default function TestWeatherPage() {
   const [selectedScenario, setSelectedScenario] = useState<string>('🐟 High Volume Market');
   const [testParams, setTestParams] = useState<SceneWeatherParams>(TEST_SCENARIOS['🐟 High Volume Market']);
   const [showInfo, setShowInfo] = useState(true);
+  const [isPanelVisible, setIsPanelVisible] = useState(true);
 
   const handleScenarioChange = (scenario: string) => {
     setSelectedScenario(scenario);
@@ -257,65 +333,84 @@ export default function TestWeatherPage() {
         />
       </div>
 
-      <div className="absolute top-4 left-4 bg-black/80 text-white p-4 rounded-lg max-w-md z-50">
-        <h2 className="text-xl font-bold mb-4">🌤️ Weather Test Panel</h2>
-        
-        <div className="space-y-2 mb-4">
-          <label className="block text-sm font-medium">Select Scenario:</label>
-          <select
-            value={selectedScenario}
-            onChange={(e) => handleScenarioChange(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2"
-          >
-            {Object.keys(TEST_SCENARIOS).map((scenario) => (
-              <option key={scenario} value={scenario}>
-                {scenario}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <button
-          onClick={() => setShowInfo(!showInfo)}
-          className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded mb-4"
-        >
-          {showInfo ? 'Hide' : 'Show'} Details
-        </button>
-
-        {showInfo && (
-          <div className="space-y-2 text-sm">
-            <div className="border-t border-gray-600 pt-2">
-              <p><strong>Weather Type:</strong> {testParams.weatherType}</p>
-              <p><strong>Mood:</strong> {testParams.mood}</p>
-              <p><strong>Water Effect:</strong> {testParams.waterEffect}</p>
-              <p><strong>Island State:</strong> {testParams.islandState}</p>
-              <p><strong>Special Events:</strong> {testParams.specialEvents?.join(', ') || 'none'}</p>
-              <p><strong>Ambient Effects:</strong> {testParams.ambientEffects?.join(', ') || 'none'}</p>
-            </div>
-            
-            <div className="border-t border-gray-600 pt-2 bg-blue-900/20 p-2 rounded">
-              <p className="font-bold text-blue-300 mb-1">🎯 Parametric Elements:</p>
-              <p><strong>🐟 Fish Count:</strong> {testParams.fishCount ?? 0}</p>
-              <p><strong>💫 Floating Orbs:</strong> {testParams.floatingOrbCount ?? 0}</p>
-              <p><strong>⚡ Energy Beams:</strong> {((testParams.energyBeamIntensity ?? 0) * 100).toFixed(0)}%</p>
-            </div>
-            
-            <div className="border-t border-gray-600 pt-2">
-              <p><strong>Sky Color:</strong> <span style={{color: testParams.skyColor}}>{testParams.skyColor}</span></p>
-              <p><strong>Fog Density:</strong> {testParams.fogDensity}</p>
-              <p><strong>Wind Speed:</strong> {testParams.windSpeed}/10</p>
-              <p><strong>Effect Intensity:</strong> {testParams.effectIntensity}</p>
-            </div>
+      {isPanelVisible ? (
+        <div className="absolute top-4 left-4 bg-black/80 text-white p-4 rounded-lg max-w-md z-50 transition-all">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold">🌤️ Weather Test Panel</h2>
+            <button 
+              onClick={() => setIsPanelVisible(false)}
+              className="text-gray-400 hover:text-white text-xl font-bold px-2"
+              title="Minimize Panel"
+            >
+              −
+            </button>
           </div>
-        )}
+          
+          <div className="space-y-2 mb-4">
+            <label className="block text-sm font-medium">Select Scenario:</label>
+            <select
+              value={selectedScenario}
+              onChange={(e) => handleScenarioChange(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2"
+            >
+              {Object.keys(TEST_SCENARIOS).map((scenario) => (
+                <option key={scenario} value={scenario}>
+                  {scenario}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        <div className="mt-4 text-xs text-gray-400 border-t border-gray-600 pt-2">
-          <p>💡 Tip: Select different scenarios to test weather + market effects</p>
-          <p>🐟 Fish count represents trading volume (0-100)</p>
-          <p>💫 Orbs represent market activity (5-30)</p>
-          <p>⚡ Beams represent price momentum (0-100%)</p>
+          <button
+            onClick={() => setShowInfo(!showInfo)}
+            className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded mb-4"
+          >
+            {showInfo ? 'Hide' : 'Show'} Details
+          </button>
+
+          {showInfo && (
+            <div className="space-y-2 text-sm">
+              <div className="border-t border-gray-600 pt-2">
+                <p><strong>Weather Type:</strong> {testParams.weatherType}</p>
+                <p><strong>Mood:</strong> {testParams.mood}</p>
+                <p><strong>Water Effect:</strong> {testParams.waterEffect}</p>
+                <p><strong>Island State:</strong> {testParams.islandState}</p>
+                <p><strong>Special Events:</strong> {testParams.specialEvents?.join(', ') || 'none'}</p>
+                <p><strong>Ambient Effects:</strong> {testParams.ambientEffects?.join(', ') || 'none'}</p>
+              </div>
+              
+              <div className="border-t border-gray-600 pt-2 bg-blue-900/20 p-2 rounded">
+                <p className="font-bold text-blue-300 mb-1">🎯 Parametric Elements:</p>
+                <p><strong>🐟 Fish Count:</strong> {testParams.fishCount ?? 0}</p>
+                <p><strong>💫 Floating Orbs:</strong> {testParams.floatingOrbCount ?? 0}</p>
+                <p><strong>⚡ Energy Beams:</strong> {((testParams.energyBeamIntensity ?? 0) * 100).toFixed(0)}%</p>
+              </div>
+              
+              <div className="border-t border-gray-600 pt-2">
+                <p><strong>Sky Color:</strong> <span style={{color: testParams.skyColor}}>{testParams.skyColor}</span></p>
+                <p><strong>Fog Density:</strong> {testParams.fogDensity}</p>
+                <p><strong>Wind Speed:</strong> {testParams.windSpeed}/10</p>
+                <p><strong>Effect Intensity:</strong> {testParams.effectIntensity}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-4 text-xs text-gray-400 border-t border-gray-600 pt-2">
+            <p>💡 Tip: Select different scenarios to test weather + market effects</p>
+            <p>🐟 Fish count represents trading volume (0-100)</p>
+            <p>💫 Orbs represent market activity (5-30)</p>
+            <p>⚡ Beams represent price momentum (0-100%)</p>
+          </div>
         </div>
-      </div>
+      ) : (
+        <button 
+          onClick={() => setIsPanelVisible(true)}
+          className="absolute top-4 left-4 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg z-50 transition-all flex items-center justify-center"
+          title="Open Config Panel"
+        >
+          <span className="text-xl">⚙️</span>
+        </button>
+      )}
 
       <div className="absolute top-4 right-4 space-y-2 z-50">
         <button

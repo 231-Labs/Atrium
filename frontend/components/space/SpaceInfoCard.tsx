@@ -2,6 +2,7 @@
 
 import { RetroPanel } from "@/components/common/RetroPanel";
 import { RetroHeading } from "@/components/common/RetroHeading";
+import { getWalrusBlobUrl } from "@/config/walrus";
 
 interface SpaceInfoCardProps {
   space: {
@@ -21,7 +22,7 @@ export function SpaceInfoCard({ space }: SpaceInfoCardProps) {
       {space.coverImage && (
         <RetroPanel variant="inset" className="p-1">
           <img
-            src={space.coverImage}
+            src={getWalrusBlobUrl(space.coverImage)}
             alt={space.name}
             className="w-full h-32 object-cover"
           />

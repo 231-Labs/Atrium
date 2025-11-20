@@ -49,5 +49,6 @@ export interface ThreeSceneApi {
   setTransformMode: (mode: 'translate' | 'rotate' | 'scale') => void;
   pickObject: (x: number, y: number) => THREE.Object3D | null;
   getSceneState: () => any[];
+  playIntroAnimation: (config?: { duration?: number; startDistanceMultiplier?: number; startHeightOffset?: number }) => Promise<void>;
   canvas: HTMLCanvasElement | null;
 }

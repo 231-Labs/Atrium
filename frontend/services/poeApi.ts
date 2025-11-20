@@ -38,13 +38,14 @@ export interface SceneWeatherParams {
   waterColor?: string; // hex
   
   // Special events (multiple)
-  specialEvents?: Array<'meteor_shower' | 'shooting_star' | 'fireball' | 'fire_ring' | 'aurora' | 'lightning' | 'none'>;
+  specialEvents?: Array<'meteor_shower' | 'shooting_star' | 'fireball' | 'fire_ring' | 'aurora' | 'lightning' | 'rainbow' | 'none'>;
+  rainbowColors?: string[]; // Custom colors for rainbow effect (hex strings)
   
   // Island state
   islandState?: 'normal' | 'glowing' | 'smoking' | 'frozen' | 'burning';
   
   // Ambient effects
-  ambientEffects?: Array<'birds_flying' | 'dust_particles' | 'sparkles' | 'embers' | 'snowfall' | 'none'>;
+  ambientEffects?: Array<'birds_flying' | 'dust_particles' | 'sparkles' | 'embers' | 'snowfall' | 'confetti' | 'none'>;
   
   // Effect intensity
   effectIntensity?: number; // 0-1

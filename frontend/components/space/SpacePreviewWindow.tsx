@@ -12,6 +12,8 @@ import { CreateSpaceForm } from '@/components/space/CreateSpaceForm';
 import { NFTListPanel } from '@/components/space/NFTListPanel';
 import { ContentManager } from '@/components/space/ContentManager';
 import { ScreenConfig } from '@/components/space/ScreenConfig';
+import { LandingPageView } from '@/components/space/LandingPageView';
+import { ExplorerLink } from '@/components/common/ExplorerLink';
 import { useRouter } from 'next/navigation';
 import { UserSpaceData } from '@/hooks/useUserSpaces';
 import { useSpaceEditor } from '@/hooks/useSpaceEditor';
@@ -34,6 +36,7 @@ export function SpacePreviewWindow() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [activeEditTab, setActiveEditTab] = useState<'nfts' | 'content' | 'screen'>('nfts');
+  const [viewMode, setViewMode] = useState<'3d' | 'landing'>('3d');
   
   const [visibleNFTs, setVisibleNFTs] = useState<Set<string>>(new Set());
   const [objectTransforms, setObjectTransforms] = useState<Map<string, ObjectTransform>>(new Map());
@@ -400,11 +403,43 @@ export function SpacePreviewWindow() {
                         }`}
                       >
                         <div style={{ fontFamily: 'Georgia, serif' }}>
-                          <h4 className="text-sm font-medium text-gray-800 mb-1">{space.name}</h4>
+                          <div className="flex items-center mb-1" onClick={(e) => e.stopPropagation()}>
+                            <ExplorerLink 
+                              objectId={space.spaceId} 
+                              showIcon={false}
+                              className="text-sm font-medium text-gray-800 hover:text-gray-600 underline decoration-dotted hover:decoration-solid underline-offset-2"
+                            >
+                              {space.name}
+                            </ExplorerLink>
+                          </div>
                           <p className="text-xs text-gray-600 mb-2 line-clamp-2">{space.description}</p>
-                          <p className="text-xs text-gray-500">
-                            ID: {space.spaceId.slice(0, 8)}...{space.spaceId.slice(-4)}
-                          </p>
+                          
+                          {selectedSpace?.spaceId === space.spaceId && (
+                            <div className="mt-3 pt-3 border-t border-gray-200 flex gap-2">
+                              <RetroButton 
+                                variant="primary" 
+                                size="sm" 
+                                className="flex-1"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleEditMode();
+                                }}
+                              >
+                                Edit
+                              </RetroButton>
+                              <RetroButton 
+                                variant="secondary" 
+                                size="sm" 
+                                className="flex-1"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEnterSpace();
+                                }}
+                              >
+                                Visit
+                              </RetroButton>
+                            </div>
+                          )}
                         </div>
                       </RetroPanel>
                     </div>
@@ -426,9 +461,29 @@ export function SpacePreviewWindow() {
             <CreateSpaceForm onClose={handleCancelCreate} onCreated={handleSpaceCreated} />
           ) : selectedSpace ? (
             <div className={`flex-1 relative flex flex-col ${isEditMode ? 'hidden md:flex' : 'flex'}`}>
-              <RetroFrameCanvas className="flex-1 w-full h-full">
-                <ThreeScene spaceId={selectedSpace.spaceId} enableGallery={true} />
-              </RetroFrameCanvas>
+              {viewMode === '3d' ? (
+                <RetroFrameCanvas className="flex-1 w-full h-full">
+                  <ThreeScene 
+                    spaceId={selectedSpace.spaceId} 
+                    enableGallery={true} 
+                    isPreview={true}
+                  />
+                </RetroFrameCanvas>
+              ) : (
+                /* Landing Page View */
+                <LandingPageView 
+                  space={selectedSpace}
+                  contentItems={[]} // Placeholder for now
+                  isSubscribed={true} // Creator is always subscribed
+                  isCreator={true}
+                  onUnlock={() => {}}
+                  onView={() => {}}
+                  onUpload={() => {
+                    setIsEditMode(true);
+                    setActiveEditTab('content');
+                  }}
+                />
+              )}
               
               {/* Overlays */}
               <div className="absolute top-4 left-4 z-10">
@@ -443,35 +498,15 @@ export function SpacePreviewWindow() {
 
               <div className="absolute top-4 right-4 z-10">
                 {!isEditMode && (
-                   <RetroButton variant="secondary" size="sm" onClick={handleEnterSpace}>
-                     Enter Full View
+                   <RetroButton 
+                    variant="secondary" 
+                    size="sm" 
+                    onClick={() => setViewMode(viewMode === '3d' ? 'landing' : '3d')}
+                   >
+                     {viewMode === '3d' ? '📖 Landing View' : '🏛️ 3D View'}
                    </RetroButton>
                 )}
               </div>
-
-              {/* Desktop Footer */}
-              {!isEditMode && (
-                <div 
-                  className="hidden md:flex px-3 md:px-4 py-3 border-t flex-col md:flex-row items-start md:items-center justify-between gap-3 bg-gray-50 border-gray-200"
-                  style={{ fontFamily: 'Georgia, serif' }}
-                >
-                  <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Space ID</p>
-                    <p className="text-xs text-gray-800">
-                      {selectedSpace.spaceId.slice(0, 10)}...{selectedSpace.spaceId.slice(-8)}
-                    </p>
-                  </div>
-                  
-                  <div className="flex gap-2 w-full md:w-auto">
-                    <RetroButton variant="primary" size="sm" onClick={handleToggleEditMode}>
-                      Edit Space
-                    </RetroButton>
-                    <RetroButton variant="secondary" size="sm" onClick={handleEnterSpace}>
-                      Visit
-                    </RetroButton>
-                  </div>
-                </div>
-              )}
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center">

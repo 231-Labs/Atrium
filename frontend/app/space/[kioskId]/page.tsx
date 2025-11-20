@@ -12,22 +12,8 @@ export default function SpacePage() {
   const spaceId = params.kioskId as string;
   const { space, loading, error } = useSpace(spaceId);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center" style={{ fontFamily: 'Georgia, serif' }}>
-        <RetroPanel className="p-8">
-          <div className="text-center">
-            <div className="inline-block animate-spin text-3xl text-gray-400 mb-4">
-              ⟳
-            </div>
-            <p className="text-sm text-gray-600">Loading space...</p>
-          </div>
-        </RetroPanel>
-      </div>
-    );
-  }
-
-  if (error || !space) {
+  // Error state (only if not loading and space is missing)
+  if (!loading && (error || !space)) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center" style={{ fontFamily: 'Georgia, serif' }}>
         <RetroPanel className="p-8 text-center max-w-md">
@@ -47,7 +33,7 @@ export default function SpacePage() {
     );
   }
 
-  return <SpaceDetail space={{
+  const spaceProps = space ? {
     id: space.id,
     kioskId: space.marketplaceKioskId,
     name: space.name,
@@ -57,6 +43,8 @@ export default function SpacePage() {
     subscriptionPrice: space.subscriptionPrice,
     creator: space.creator,
     videoBlobs: space.videoBlobs,
-  }} />;
+  } : undefined;
+
+  return <SpaceDetail space={spaceProps} isLoading={loading} spaceId={spaceId} />;
 }
 

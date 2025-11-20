@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { RetroPanel } from "@/components/common/RetroPanel";
 import { RetroButton } from "@/components/common/RetroButton";
+import { getWalrusBlobUrl } from "@/config/walrus";
 
 interface Space {
   kioskId: string;
@@ -40,7 +41,7 @@ export function SpaceCard({ space }: SpaceCardProps) {
       >
         {space.coverImage ? (
           <img
-            src={space.coverImage}
+            src={getWalrusBlobUrl(space.coverImage)}
             alt={space.name}
             className="w-full h-full object-cover"
           />

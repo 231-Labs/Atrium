@@ -9,6 +9,7 @@ export interface EffectConfig {
   scene: THREE.Scene;
   camera: THREE.Camera;
   intensity?: number;
+  colors?: number[]; // Custom colors for effects like Rainbow
 }
 
 /**
@@ -27,7 +28,7 @@ export class SpecialEffectsManager {
   /**
    * Add effect
    */
-  addEffect(type: string, intensity: number = 1.0): void {
+  addEffect(type: string, intensity: number = 1.0, colors?: number[]): void {
     // Remove existing effect first
     if (this.activeEffects.has(type)) {
       this.removeEffect(type);
@@ -56,6 +57,24 @@ export class SpecialEffectsManager {
         break;
       case 'embers':
         effect = new Embers({ scene: this.scene, camera: this.camera, intensity });
+        break;
+      case 'sparkles':
+        effect = new Sparkles({ scene: this.scene, camera: this.camera, intensity });
+        break;
+      case 'dust_particles':
+        effect = new DustParticles({ scene: this.scene, camera: this.camera, intensity });
+        break;
+      case 'snowfall':
+        effect = new Snowfall({ scene: this.scene, camera: this.camera, intensity });
+        break;
+      case 'birds_flying':
+        effect = new BirdsFlying({ scene: this.scene, camera: this.camera, intensity });
+        break;
+      case 'confetti':
+        effect = new Confetti({ scene: this.scene, camera: this.camera, intensity });
+        break;
+      case 'rainbow':
+        effect = new Rainbow({ scene: this.scene, camera: this.camera, intensity, colors });
         break;
       default:
         console.warn(`Unknown effect type: ${type}`);
@@ -501,6 +520,7 @@ class Fireball extends SpecialEffect {
       transparent: true,
       opacity: 0.8,
       blending: THREE.AdditiveBlending,
+      sizeAttenuation: true,
     });
     
     const particles = new THREE.Points(particlesGeometry, particlesMaterial);
@@ -924,3 +944,459 @@ class Embers extends SpecialEffect {
   }
 }
 
+/**
+ * Sparkles effect (Floating twinkling particles)
+ */
+class Sparkles extends SpecialEffect {
+  private particles: THREE.Points | null = null;
+
+  constructor(config: EffectConfig) {
+    super(config);
+    this.init();
+  }
+
+  init(): void {
+    const particleCount = 800;
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    const velocities = new Float32Array(particleCount * 3);
+    const phases = new Float32Array(particleCount);
+
+    for (let i = 0; i < particleCount; i++) {
+      this.resetParticle(positions, velocities, phases, i, true);
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('velocity', new THREE.BufferAttribute(velocities, 3));
+    geometry.setAttribute('phase', new THREE.BufferAttribute(phases, 1));
+
+    const material = new THREE.PointsMaterial({
+      color: 0xFFD700, // Gold
+      size: 0.25,
+      transparent: true,
+      opacity: 0.8,
+      blending: THREE.AdditiveBlending,
+      sizeAttenuation: true,
+      depthWrite: false,
+    });
+
+    this.particles = new THREE.Points(geometry, material);
+    this.scene.add(this.particles);
+    this.objects.push(this.particles);
+  }
+
+  private resetParticle(positions: Float32Array, velocities: Float32Array, phases: Float32Array, i: number, initial: boolean = false) {
+    // Spawn volume
+    positions[i * 3] = (Math.random() - 0.5) * 60;
+    positions[i * 3 + 1] = initial ? Math.random() * 50 : 0;
+    positions[i * 3 + 2] = (Math.random() - 0.5) * 60;
+
+    // Gentle upward drift
+    velocities[i * 3] = (Math.random() - 0.5) * 0.5;
+    velocities[i * 3 + 1] = 0.2 + Math.random() * 0.8;
+    velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.5;
+
+    phases[i] = Math.random() * Math.PI * 2;
+  }
+
+  update(deltaTime: number): void {
+    this.lifetime += deltaTime;
+
+    if (this.particles) {
+      const positions = this.particles.geometry.attributes.position.array as Float32Array;
+      const velocities = this.particles.geometry.attributes.velocity.array as Float32Array;
+      const phases = this.particles.geometry.attributes.phase.array as Float32Array;
+      
+      const count = positions.length / 3;
+
+      for (let i = 0; i < count; i++) {
+        const idx = i * 3;
+
+        // Move
+        positions[idx] += velocities[idx] * deltaTime;
+        positions[idx + 1] += velocities[idx + 1] * deltaTime;
+        positions[idx + 2] += velocities[idx + 2] * deltaTime;
+
+        // Respawn
+        if (positions[idx + 1] > 50) {
+          this.resetParticle(positions, velocities, phases, i);
+        }
+      }
+      
+      this.particles.geometry.attributes.position.needsUpdate = true;
+    }
+  }
+}
+
+/**
+ * Dust Particles effect (Ambient dust)
+ */
+class DustParticles extends SpecialEffect {
+  private particles: THREE.Points | null = null;
+
+  constructor(config: EffectConfig) {
+    super(config);
+    this.init();
+  }
+
+  init(): void {
+    const particleCount = 1000;
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    const velocities = new Float32Array(particleCount * 3);
+
+    for (let i = 0; i < particleCount; i++) {
+      this.resetParticle(positions, velocities, i, true);
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('velocity', new THREE.BufferAttribute(velocities, 3));
+
+    const material = new THREE.PointsMaterial({
+      color: 0xCCCCCC,
+      size: 0.1,
+      transparent: true,
+      opacity: 0.5,
+      sizeAttenuation: true,
+      depthWrite: false,
+    });
+
+    this.particles = new THREE.Points(geometry, material);
+    this.scene.add(this.particles);
+    this.objects.push(this.particles);
+  }
+
+  private resetParticle(positions: Float32Array, velocities: Float32Array, i: number, initial: boolean = false) {
+    // Spawn volume (wide area)
+    positions[i * 3] = (Math.random() - 0.5) * 100;
+    positions[i * 3 + 1] = Math.random() * 60;
+    positions[i * 3 + 2] = (Math.random() - 0.5) * 100;
+
+    // Slow random drift
+    velocities[i * 3] = (Math.random() - 0.5) * 1.0;
+    velocities[i * 3 + 1] = (Math.random() - 0.5) * 1.0;
+    velocities[i * 3 + 2] = (Math.random() - 0.5) * 1.0;
+  }
+
+  update(deltaTime: number): void {
+    if (this.particles) {
+      const positions = this.particles.geometry.attributes.position.array as Float32Array;
+      const velocities = this.particles.geometry.attributes.velocity.array as Float32Array;
+      const count = positions.length / 3;
+
+      for (let i = 0; i < count; i++) {
+        const idx = i * 3;
+        positions[idx] += velocities[idx] * deltaTime;
+        positions[idx + 1] += velocities[idx + 1] * deltaTime;
+        positions[idx + 2] += velocities[idx + 2] * deltaTime;
+
+        // Wrap around bounds to keep density constant without respawning logic
+        if (positions[idx] > 50) positions[idx] = -50;
+        if (positions[idx] < -50) positions[idx] = 50;
+        if (positions[idx + 1] > 60) positions[idx + 1] = 0;
+        if (positions[idx + 1] < 0) positions[idx + 1] = 60;
+        if (positions[idx + 2] > 50) positions[idx + 2] = -50;
+        if (positions[idx + 2] < -50) positions[idx + 2] = 50;
+      }
+      
+      this.particles.geometry.attributes.position.needsUpdate = true;
+    }
+  }
+}
+
+/**
+ * Snowfall effect
+ */
+class Snowfall extends SpecialEffect {
+  private particles: THREE.Points | null = null;
+
+  constructor(config: EffectConfig) {
+    super(config);
+    this.init();
+  }
+
+  init(): void {
+    const particleCount = 1500;
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    const velocities = new Float32Array(particleCount * 3);
+
+    for (let i = 0; i < particleCount; i++) {
+      this.resetParticle(positions, velocities, i, true);
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('velocity', new THREE.BufferAttribute(velocities, 3));
+
+    const material = new THREE.PointsMaterial({
+      color: 0xFFFFFF,
+      size: 0.2,
+      transparent: true,
+      opacity: 0.8,
+      blending: THREE.AdditiveBlending,
+      sizeAttenuation: true,
+      depthWrite: false,
+    });
+
+    this.particles = new THREE.Points(geometry, material);
+    this.scene.add(this.particles);
+    this.objects.push(this.particles);
+  }
+
+  private resetParticle(positions: Float32Array, velocities: Float32Array, i: number, initial: boolean = false) {
+    positions[i * 3] = (Math.random() - 0.5) * 100;
+    positions[i * 3 + 1] = initial ? Math.random() * 80 : 80;
+    positions[i * 3 + 2] = (Math.random() - 0.5) * 100;
+
+    // Fall down with slight sway
+    velocities[i * 3] = (Math.random() - 0.5) * 2.0;
+    velocities[i * 3 + 1] = -2.0 - Math.random() * 3.0; // Downward speed
+    velocities[i * 3 + 2] = (Math.random() - 0.5) * 2.0;
+  }
+
+  update(deltaTime: number): void {
+    this.lifetime += deltaTime;
+
+    if (this.particles) {
+      const positions = this.particles.geometry.attributes.position.array as Float32Array;
+      const velocities = this.particles.geometry.attributes.velocity.array as Float32Array;
+      const count = positions.length / 3;
+
+      for (let i = 0; i < count; i++) {
+        const idx = i * 3;
+        
+        // Add sway
+        const sway = Math.sin(this.lifetime + idx) * 0.02;
+
+        positions[idx] += (velocities[idx] + sway) * deltaTime;
+        positions[idx + 1] += velocities[idx + 1] * deltaTime;
+        positions[idx + 2] += (velocities[idx + 2] + sway) * deltaTime;
+
+        // Respawn if hit ground
+        if (positions[idx + 1] < 0) {
+          this.resetParticle(positions, velocities, i);
+        }
+      }
+      
+      this.particles.geometry.attributes.position.needsUpdate = true;
+    }
+  }
+}
+
+/**
+ * Birds Flying effect (Simple boids)
+ */
+class BirdsFlying extends SpecialEffect {
+  private birds: THREE.Mesh[] = [];
+
+  constructor(config: EffectConfig) {
+    super(config);
+    this.init();
+  }
+
+  init(): void {
+    const birdCount = 10;
+    const geometry = new THREE.ConeGeometry(0.2, 0.8, 4);
+    geometry.rotateX(Math.PI / 2); // Point forward
+    const material = new THREE.MeshBasicMaterial({ color: 0x333333 });
+
+    for (let i = 0; i < birdCount; i++) {
+      const bird = new THREE.Mesh(geometry, material);
+      bird.position.set(
+        (Math.random() - 0.5) * 60,
+        30 + Math.random() * 20,
+        (Math.random() - 0.5) * 60
+      );
+      
+      // Store velocity in userData
+      bird.userData.velocity = new THREE.Vector3(
+        (Math.random() - 0.5) * 10,
+        (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 10
+      );
+
+      this.scene.add(bird);
+      this.objects.push(bird);
+      this.birds.push(bird);
+    }
+  }
+
+  update(deltaTime: number): void {
+    const center = new THREE.Vector3(0, 40, 0);
+
+    this.birds.forEach(bird => {
+      const velocity = bird.userData.velocity as THREE.Vector3;
+      
+      // Move
+      bird.position.add(velocity.clone().multiplyScalar(deltaTime));
+      
+      // Steer towards center slightly to keep them in view
+      const toCenter = center.clone().sub(bird.position).normalize().multiplyScalar(0.1);
+      velocity.add(toCenter);
+      
+      // Limit speed
+      if (velocity.length() > 10) velocity.normalize().multiplyScalar(10);
+      
+      // Orient to velocity
+      bird.lookAt(bird.position.clone().add(velocity));
+    });
+  }
+}
+
+/**
+ * Confetti effect (Positive celebration)
+ */
+class Confetti extends SpecialEffect {
+  private particles: THREE.Points | null = null;
+
+  constructor(config: EffectConfig) {
+    super(config);
+    this.init();
+  }
+
+  init(): void {
+    const particleCount = 1000;
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    const velocities = new Float32Array(particleCount * 3);
+    const colors = new Float32Array(particleCount * 3);
+
+    const colorPalette = [
+      new THREE.Color(0xFF0000), // Red
+      new THREE.Color(0x00FF00), // Green
+      new THREE.Color(0x0000FF), // Blue
+      new THREE.Color(0xFFFF00), // Yellow
+      new THREE.Color(0xFF00FF), // Magenta
+      new THREE.Color(0x00FFFF), // Cyan
+      new THREE.Color(0xFFA500), // Orange
+    ];
+
+    for (let i = 0; i < particleCount; i++) {
+      this.resetParticle(positions, velocities, i, true);
+      
+      // Assign random color
+      const color = colorPalette[Math.floor(Math.random() * colorPalette.length)];
+      colors[i * 3] = color.r;
+      colors[i * 3 + 1] = color.g;
+      colors[i * 3 + 2] = color.b;
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('velocity', new THREE.BufferAttribute(velocities, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const material = new THREE.PointsMaterial({
+      size: 0.3,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.9,
+      sizeAttenuation: true,
+      depthWrite: false,
+    });
+
+    this.particles = new THREE.Points(geometry, material);
+    this.scene.add(this.particles);
+    this.objects.push(this.particles);
+  }
+
+  private resetParticle(positions: Float32Array, velocities: Float32Array, i: number, initial: boolean = false) {
+    positions[i * 3] = (Math.random() - 0.5) * 80;
+    positions[i * 3 + 1] = initial ? Math.random() * 60 : 60;
+    positions[i * 3 + 2] = (Math.random() - 0.5) * 80;
+
+    // Flutter down
+    velocities[i * 3] = (Math.random() - 0.5) * 2.0;
+    velocities[i * 3 + 1] = -1.0 - Math.random() * 2.0; // Slow fall
+    velocities[i * 3 + 2] = (Math.random() - 0.5) * 2.0;
+  }
+
+  update(deltaTime: number): void {
+    if (this.particles) {
+      const positions = this.particles.geometry.attributes.position.array as Float32Array;
+      const velocities = this.particles.geometry.attributes.velocity.array as Float32Array;
+      const count = positions.length / 3;
+
+      for (let i = 0; i < count; i++) {
+        const idx = i * 3;
+        
+        // Add chaotic flutter
+        const flutterX = Math.sin(this.lifetime * 5 + idx) * 0.05;
+        const flutterZ = Math.cos(this.lifetime * 3 + idx) * 0.05;
+
+        positions[idx] += (velocities[idx] + flutterX) * deltaTime;
+        positions[idx + 1] += velocities[idx + 1] * deltaTime;
+        positions[idx + 2] += (velocities[idx + 2] + flutterZ) * deltaTime;
+
+        // Respawn if hit ground
+        if (positions[idx + 1] < 0) {
+          this.resetParticle(positions, velocities, i);
+        }
+      }
+      
+      this.particles.geometry.attributes.position.needsUpdate = true;
+      this.particles.rotation.y += deltaTime * 0.2; // Slowly rotate entire cloud for dynamic feel
+    }
+  }
+}
+
+/**
+ * Rainbow effect (Simple semi-circle arcs)
+ */
+class Rainbow extends SpecialEffect {
+  private customColors?: number[];
+
+  constructor(config: EffectConfig) {
+    super(config);
+    this.customColors = config.colors;
+    this.init();
+  }
+
+  init(): void {
+    // Default: "Trendy" Gradient (Pastel/Vaporwave) - refined 5-color palette
+    const defaultColors = [
+      0x8EC5FC, // Light Blue
+      0xE0C3FC, // Lavender
+      0xFF99AC, // Salmon Pink
+      0xFFCC99, // Peach
+      0xFFE5B4, // Cream
+    ];
+
+    const colors = this.customColors && this.customColors.length > 0 
+      ? this.customColors 
+      : defaultColors;
+
+    const radius = 40; // Smaller radius (was 80)
+    const tubeRadius = 2; // Slightly thinner tube (was 3)
+    
+    colors.forEach((color, i) => {
+      // Torus segment (half circle)
+      const geometry = new THREE.TorusGeometry(radius - i * tubeRadius * 1.2, tubeRadius, 8, 64, Math.PI);
+      const material = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0.8 - i * 0.05, // More opaque
+        side: THREE.DoubleSide,
+        depthWrite: false, // Better transparency blending
+      });
+      
+      const arc = new THREE.Mesh(geometry, material);
+      
+      // Position closer to island but large enough to frame it
+      arc.position.set(0, -5, -30); // Moved closer and slightly up
+      
+      this.scene.add(arc);
+      this.objects.push(arc);
+    });
+  }
+
+  update(deltaTime: number): void {
+    this.lifetime += deltaTime;
+    
+    this.objects.forEach((obj) => {
+      if (obj instanceof THREE.Mesh && obj.material instanceof THREE.MeshBasicMaterial) {
+        // Slower, gentle pulse but keeping high base opacity
+        obj.material.opacity = 0.6 + Math.sin(this.lifetime * 0.4) * 0.15;
+      }
+    });
+  }
+}

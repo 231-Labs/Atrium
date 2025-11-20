@@ -17,6 +17,17 @@ export class SceneManager {
   private dracoLoader: DRACOLoader;
   private clock: THREE.Clock;
   private transformControls?: any;
+  
+  // Animation state
+  private introAnimation: {
+    isActive: boolean;
+    startTime: number;
+    duration: number;
+    startPos: THREE.Vector3;
+    endPos: THREE.Vector3;
+    startTarget: THREE.Vector3;
+    endTarget: THREE.Vector3;
+  } | null = null;
 
   constructor(canvas: HTMLCanvasElement, config: ThreeSceneConfig = {}) {
     this.clock = new THREE.Clock();
@@ -63,7 +74,7 @@ export class SceneManager {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.05;
     this.controls.minDistance = 5;
-    this.controls.maxDistance = 30; // Allow Monument Valley style distant view
+    this.controls.maxDistance = 60; // Increased for intro view
     this.controls.maxPolarAngle = Math.PI / 2.2; // Slight constraint to maintain architectural feel
     this.controls.update(); // Apply initial target
 
@@ -134,6 +145,34 @@ export class SceneManager {
       const deltaTime = this.clock.getDelta();
       
       this.controls.update();
+
+      // Handle Intro Animation
+      if (this.introAnimation && this.introAnimation.isActive) {
+        const elapsed = Date.now() - this.introAnimation.startTime;
+        const progress = Math.min(elapsed / this.introAnimation.duration, 1.0);
+        
+        // Cubic Ease Out
+        const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+        const alpha = easeOutCubic(progress);
+
+        this.camera.position.lerpVectors(
+          this.introAnimation.startPos, 
+          this.introAnimation.endPos, 
+          alpha
+        );
+        
+        this.controls.target.lerpVectors(
+          this.introAnimation.startTarget,
+          this.introAnimation.endTarget,
+          alpha
+        );
+        this.controls.update();
+
+        if (progress >= 1.0) {
+          this.introAnimation.isActive = false;
+          this.controls.enabled = true;
+        }
+      }
 
       // Update gallery scene animations
       if (this.galleryScene) {
@@ -427,6 +466,50 @@ export class SceneManager {
   // Get current weather parameters
   getCurrentWeatherParams() {
     return this.galleryScene?.getCurrentWeatherParams();
+  }
+
+  /**
+   * Plays a cinematic intro animation (Monument Valley style)
+   */
+  playIntroAnimation(options: {
+    duration?: number;
+    startDistanceMultiplier?: number;
+    startHeightOffset?: number;
+  } = {}): Promise<void> {
+    const {
+      duration = 4000,
+      startDistanceMultiplier = 120,
+      startHeightOffset = 50
+    } = options;
+
+    return new Promise((resolve) => {
+      const currentPos = this.camera.position.clone();
+      const currentTarget = this.controls.target.clone();
+
+      // Define start position (High altitude, isometric-ish)
+      // Start further away and higher to create a longer "approach" shot
+      const startPos = currentPos.clone().normalize().multiplyScalar(startDistanceMultiplier).add(new THREE.Vector3(0, startHeightOffset, 0));
+      
+      this.controls.enabled = false; // Disable user interaction
+      
+      this.introAnimation = {
+        isActive: true,
+        startTime: Date.now(),
+        duration,
+        startPos,
+        endPos: currentPos,
+        startTarget: currentTarget,
+        endTarget: currentTarget // Keep looking at same target
+      };
+      
+      // Set initial position immediately
+      this.camera.position.copy(startPos);
+
+      // Resolve after duration
+      setTimeout(() => {
+        resolve();
+      }, duration);
+    });
   }
 }
 

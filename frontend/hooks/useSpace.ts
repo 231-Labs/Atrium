@@ -54,10 +54,8 @@ export function useSpace(spaceId: string | null) {
         id: spaceId,
         name: fields.name || 'Untitled Space',
         description: fields.description || '',
-        coverImage: fields.cover_image_blob_id 
-          ? `https://aggregator.walrus-testnet.walrus.space/v1/blobs/${fields.cover_image_blob_id}`
-          : '',
-        configQuilt: fields.config_quilt_blob_id || '',
+        coverImage: fields.cover_image || fields.cover_image_blob_id || '',  // Try both field names
+        configQuilt: fields.config_quilt || fields.config_quilt_blob_id || '',
         subscriptionPrice: fields.subscription_price_per_day || '0',
         creator: fields.creator || '',
         marketplaceKioskId: fields.marketplace_kiosk_id || '',

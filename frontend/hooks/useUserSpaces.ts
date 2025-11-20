@@ -79,10 +79,8 @@ export function useUserSpaces() {
             ownershipId,
             name: spaceFields.name || 'Untitled Space',
             description: spaceFields.description || '',
-            coverImage: spaceFields.cover_image_blob_id
-              ? `https://aggregator.walrus-testnet.walrus.space/v1/blobs/${spaceFields.cover_image_blob_id}`
-              : '',
-            configQuilt: spaceFields.config_quilt_blob_id || '',
+            coverImage: spaceFields.cover_image || spaceFields.cover_image_blob_id || '',  // Try both field names
+            configQuilt: spaceFields.config_quilt || spaceFields.config_quilt_blob_id || '',
             subscriptionPrice: spaceFields.subscription_price_per_day || '0',
             creator: spaceFields.creator || '',
             marketplaceKioskId: spaceFields.marketplace_kiosk_id || '',

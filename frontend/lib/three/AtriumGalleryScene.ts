@@ -1785,7 +1785,12 @@ export class AtriumGalleryScene {
       if (params.specialEvents && params.specialEvents.length > 0) {
         params.specialEvents.forEach(event => {
           if (event !== 'none') {
-            this.effectsManager!.addEffect(event, params.effectIntensity || 1.0);
+            let colors: number[] | undefined;
+            // Pass custom colors for rainbow if available
+            if (event === 'rainbow' && params.rainbowColors) {
+               colors = params.rainbowColors.map(c => parseInt(c.replace('#', ''), 16));
+            }
+            this.effectsManager!.addEffect(event, params.effectIntensity || 1.0, colors);
           }
         });
         console.log('✨ Special effects updated:', params.specialEvents);

@@ -136,15 +136,19 @@ ${timeFactorsSection}
    - turbulent: Violent waves and whitecaps (high volatility/activity)
    - frozen: Ice surface (extreme bear market)
 
-8. **Special Events (specialEvents)** - Array of events (0-3 events):
+   8. **Special Events (specialEvents)** - Array of events (0-3 events):
    - meteor_shower: Falling stars (positive momentum, high trending)
    - shooting_star: Single shooting star (hope, random event)
    - fireball: Large fireball falling (market crash, strong bear)
    - fire_ring: Ring of fire around island (heated market, high activity)
    - aurora: Northern lights (magical bull run, nighttime)
    - lightning: Lightning strikes (high volatility, stormy)
+   - rainbow: Rainbow arch (recovery, celebration, hope)
    - **Priority rule**: Special date events take precedence!
    - none: No special events (use for calm days)
+   
+   **NEW OPTIONAL PARAMS:**
+   - **rainbowColors**: Array of 3-5 hex strings (e.g. ["#FF0000", "#00FF00"]) for custom rainbow palette. Use trendy/pastel colors!
 
 9. **Island State (islandState)**:
    - normal: Regular appearance
@@ -159,6 +163,7 @@ ${timeFactorsSection}
    - sparkles: Magical sparkles (excitement, high trending)
    - embers: Floating embers (danger, bearish)
    - snowfall: Snow falling (cold market)
+   - confetti: Colorful paper confetti (celebration, ATH)
 
 11. **Parametric Visual Elements (NEW - for demo impact!)**:
    - **fishCount** (number, 0-100): Swimming fish in the water
@@ -210,13 +215,14 @@ interface SceneWeatherParams {
   waterColor: string;         // hex color
   
   // Special events (can be multiple)
-  specialEvents: Array<'meteor_shower' | 'shooting_star' | 'fireball' | 'fire_ring' | 'aurora' | 'lightning' | 'none'>;
+  specialEvents: Array<'meteor_shower' | 'shooting_star' | 'fireball' | 'fire_ring' | 'aurora' | 'lightning' | 'rainbow' | 'none'>;
+  rainbowColors?: string[];   // Custom colors for rainbow (3-5 hex strings)
   
   // Island state
   islandState: 'normal' | 'glowing' | 'smoking' | 'frozen' | 'burning';
   
   // Ambient effects
-  ambientEffects: Array<'birds_flying' | 'dust_particles' | 'sparkles' | 'embers' | 'snowfall' | 'none'>;
+  ambientEffects: Array<'birds_flying' | 'dust_particles' | 'sparkles' | 'embers' | 'snowfall' | 'confetti' | 'none'>;
   
   // Intensity modifiers
   effectIntensity: number;    // 0-1, overall effect strength
