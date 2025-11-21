@@ -216,6 +216,13 @@ export function useThreeScene(options: UseThreeSceneOptions = {}) {
     }
   }, []);
 
+  const setTransformCallbacks = useCallback((
+    onDraggingChanged?: (isDragging: boolean) => void,
+    onTransformChange?: () => void
+  ) => {
+    sceneManagerRef.current?.setTransformCallbacks(onDraggingChanged, onTransformChange);
+  }, []);
+
   return {
     canvasRef,
     sceneManager: sceneManagerRef.current || undefined,
@@ -238,6 +245,7 @@ export function useThreeScene(options: UseThreeSceneOptions = {}) {
     pickObject,
     getSceneState,
     playIntroAnimation,
+    setTransformCallbacks,
   };
 }
 

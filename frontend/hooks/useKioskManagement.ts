@@ -8,6 +8,7 @@ export interface KioskNFT {
   name: string;
   description?: string;
   imageUrl?: string;
+  glbFile?: string; // Walrus blob ID for 3D model
   objectType: '2d' | '3d';
   isListed: boolean;
   price?: string;
@@ -78,12 +79,28 @@ export function useKioskManagement({ kioskId, enabled = true }: UseKioskManageme
             const display = (objectData.data as any).display?.data;
             const content = (objectData.data as any).content;
             
-            let objectType: '2d' | '3d' = '3d';
+            let objectType: '2d' | '3d' = '2d'; // Default to 2D
+            
+            // Check for object_type field first
             if (content?.fields?.object_type) {
               objectType = content.fields.object_type;
-            } else if (display?.image_url || display?.imageUrl) {
+            } 
+            // Check for 3D model related fields (glb_file, model_url, etc.)
+            else if (
+              display?.glb_file || 
+              content?.fields?.glb_file || 
+              display?.model_url || 
+              content?.fields?.model_url
+            ) {
+              objectType = '3d';
+            }
+            // Otherwise, if only image is present, it's 2D
+            else if (display?.image_url || display?.imageUrl) {
               objectType = '2d';
             }
+
+            // 獲取 3D 模型的 blob ID
+            const glbFile = display?.glb_file || content?.fields?.glb_file;
 
             nftList.push({
               id: item.objectId,
@@ -91,6 +108,7 @@ export function useKioskManagement({ kioskId, enabled = true }: UseKioskManageme
               name: display?.name || 'Unnamed NFT',
               description: display?.description,
               imageUrl: display?.image_url || display?.imageUrl,
+              glbFile: glbFile,
               objectType,
               isListed: !!item.listing,
               price: item.listing?.price,

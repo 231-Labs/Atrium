@@ -1395,7 +1395,7 @@ class Rainbow extends SpecialEffect {
     this.objects.forEach((obj) => {
       if (obj instanceof THREE.Mesh && obj.material instanceof THREE.MeshBasicMaterial) {
         // Slower, gentle pulse but keeping high base opacity
-        obj.material.opacity = 0.6 + Math.sin(this.lifetime * 0.4) * 0.15;
+        obj.material.opacity = 0.6 + Math.sin(this.lifetime * 0.6) * 0.15;
       }
     });
   }

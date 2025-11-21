@@ -40,12 +40,16 @@ export class WaterEffectsManager {
    */
   private createWaterPlane(): void {
     const geometry = new THREE.PlaneGeometry(200, 200, 100, 100);
-    const material = new THREE.MeshStandardMaterial({
-      color: 0x4DA6FF,
-      metalness: 0.9,
-      roughness: 0.1,
+    // Use MeshPhongMaterial for better color control in bright environments
+    const material = new THREE.MeshPhongMaterial({
+      color: 0x2299dd,
+      emissive: 0x1166aa,
+      emissiveIntensity: 0.4,
+      specular: 0x1166aa, // Blue specular highlights instead of white
+      shininess: 100,
       transparent: true,
-      opacity: 0.8,
+      opacity: 0.85,
+      flatShading: false,
     });
 
     this.waterPlane = new THREE.Mesh(geometry, material);
@@ -66,8 +70,14 @@ export class WaterEffectsManager {
       this.currentEffect = config.effectType;
     }
 
-    if (config.waterColor && this.waterPlane.material instanceof THREE.MeshStandardMaterial) {
-      this.waterPlane.material.color.set(config.waterColor);
+    // Enable external waterColor updates to allow changing color
+    if (config.waterColor) {
+      if (this.waterPlane.material instanceof THREE.MeshStandardMaterial || this.waterPlane.material instanceof THREE.MeshPhongMaterial) {
+        this.waterPlane.material.color.set(config.waterColor);
+        if (this.waterPlane.material instanceof THREE.MeshPhongMaterial) {
+          this.waterPlane.material.emissive.set(config.waterColor);
+        }
+      }
     }
 
     const intensity = config.intensity || 1.0;
@@ -408,11 +418,22 @@ export class WaterEffectsManager {
       this.iceOverlay = null;
     }
 
-    if (this.waterPlane && this.waterPlane.material instanceof THREE.MeshStandardMaterial) {
-      this.waterPlane.material.color.set(0x4DA6FF);
-      this.waterPlane.material.metalness = 0.9;
-      this.waterPlane.material.roughness = 0.1;
-      this.waterPlane.material.opacity = 0.8;
+    if (this.waterPlane && (this.waterPlane.material instanceof THREE.MeshStandardMaterial || this.waterPlane.material instanceof THREE.MeshPhongMaterial)) {
+      this.waterPlane.material.color.set(0x6688aa); // Grayish blue
+      this.waterPlane.material.transparent = true;
+      this.waterPlane.material.opacity = 0.85;
+      
+      if (this.waterPlane.material instanceof THREE.MeshStandardMaterial) {
+         this.waterPlane.material.metalness = 0.1;
+         this.waterPlane.material.roughness = 0.05;
+         this.waterPlane.material.emissive.set(0x6688aa);
+         this.waterPlane.material.emissiveIntensity = 0.2;
+      } else if (this.waterPlane.material instanceof THREE.MeshPhongMaterial) {
+         this.waterPlane.material.specular.set(0x0055aa);
+         this.waterPlane.material.shininess = 100;
+         this.waterPlane.material.emissive.set(0x6688aa);
+         this.waterPlane.material.emissiveIntensity = 0.2;
+      }
     }
   }
 

@@ -32,10 +32,33 @@ export const ThreeScene = forwardRef<ThreeSceneApi, ThreeSceneProps>(({
   const [internalWeatherMode, setInternalWeatherMode] = useState<WeatherMode>('dynamic');
   const weatherMode = controlledWeatherMode ?? internalWeatherMode;
 
+  // Track dynamic day/night cycle
+  const [isDynamicNight, setIsDynamicNight] = useState(false);
+
+  // Check time periodically for dynamic mode
+  useEffect(() => {
+    if (weatherMode !== 'dynamic') return;
+
+    const checkTime = () => {
+      const hour = new Date().getHours();
+      // Sync with timeFactors logic: 20:00 - 05:00 is night
+      const isNight = hour >= 20 || hour < 5;
+      setIsDynamicNight(isNight);
+    };
+
+    checkTime(); // Initial check
+    const interval = setInterval(checkTime, 300000); // Check every 5 minute
+
+    return () => clearInterval(interval);
+  }, [weatherMode]);
+
   const themeConfig = useMemo(() => {
     if (weatherMode === 'night') return STAGE_THEMES.dark;
-    return STAGE_THEMES.light;
-  }, [weatherMode]);
+    if (weatherMode === 'day') return STAGE_THEMES.light;
+    
+    // Dynamic mode: Use time-based determination
+    return isDynamicNight ? STAGE_THEMES.dark : STAGE_THEMES.light;
+  }, [weatherMode, isDynamicNight]);
 
   // Memoize scene options to prevent re-initialization
   const sceneOptions = useMemo(() => ({
@@ -48,8 +71,10 @@ export const ThreeScene = forwardRef<ThreeSceneApi, ThreeSceneProps>(({
 
   const {
     canvasRef,
+    sceneManager,
     sceneInitialized,
     isLoading,
+    loadedModels: loadedModelsArray,
     loadModel,
     loadModels,
     removeModel,
@@ -61,7 +86,13 @@ export const ThreeScene = forwardRef<ThreeSceneApi, ThreeSceneProps>(({
     pickObject,
     getSceneState,
     playIntroAnimation,
+    setTransformCallbacks,
   } = useThreeScene(sceneOptions);
+
+  // Convert loadedModels array to Map for easy lookup
+  const loadedModelsMap = useMemo(() => {
+    return new Map(loadedModelsArray.map(({ id, model }) => [id, model]));
+  }, [loadedModelsArray]);
 
   // Expose API via ref
   useImperativeHandle(ref, () => ({
@@ -70,11 +101,30 @@ export const ThreeScene = forwardRef<ThreeSceneApi, ThreeSceneProps>(({
     removeModel,
     clearModels,
     attachTransformControls,
+    attachTransformControlsById: (modelId: string) => {
+      const modelData = loadedModelsArray.find(m => m.id === modelId);
+      if (modelData) {
+        attachTransformControls(modelData.model);
+        return true;
+      }
+      return false;
+    },
     detachTransformControls,
     setTransformMode,
     pickObject,
     getSceneState,
     playIntroAnimation,
+    setTransformCallbacks,
+    updateModelPosition: (modelId: string, position: { x: number; y: number; z: number }) => {
+      sceneManager?.updateModelPosition(modelId, position);
+    },
+    updateModelRotation: (modelId: string, rotation: { x: number; y: number; z: number }) => {
+      sceneManager?.updateModelRotation(modelId, rotation);
+    },
+    updateModelScale: (modelId: string, scale: { x: number; y: number; z: number }) => {
+      sceneManager?.updateModelScale(modelId, scale);
+    },
+    loadedModels: loadedModelsArray,
     canvas: canvasRef.current
   }));
 
@@ -149,13 +199,37 @@ export const ThreeScene = forwardRef<ThreeSceneApi, ThreeSceneProps>(({
     return null;
   }, [weatherMode, externalWeatherParams, apiWeatherParams, weatherError]);
 
-  // Load models when they change
+  // Load and update models when they change
   useEffect(() => {
-    if (sceneInitialized && models.length > 0) {
-      loadModels(models);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sceneInitialized, models.length]);
+    if (!sceneInitialized || !sceneManager) return;
+
+    models.forEach(modelItem => {
+      const existingModel = loadedModelsMap.get(modelItem.id);
+      
+      if (existingModel) {
+        // Update existing model's transform
+        if (modelItem.position) {
+          existingModel.position.set(modelItem.position.x, modelItem.position.y, modelItem.position.z);
+        }
+        if (modelItem.rotation) {
+          existingModel.rotation.set(modelItem.rotation.x, modelItem.rotation.y, modelItem.rotation.z);
+        }
+        if (modelItem.scale) {
+          existingModel.scale.set(modelItem.scale.x, modelItem.scale.y, modelItem.scale.z);
+        }
+      } else {
+        // Load new model
+        loadModel(modelItem);
+      }
+    });
+    
+    // Remove models that are no longer in the list
+    Array.from(loadedModelsMap.keys()).forEach(modelId => {
+      if (!models.find(m => m.id === modelId)) {
+        removeModel(modelId);
+      }
+    });
+  }, [sceneInitialized, sceneManager, models, loadedModelsMap, loadModel, removeModel]);
 
   // Update weather when params change
   useEffect(() => {

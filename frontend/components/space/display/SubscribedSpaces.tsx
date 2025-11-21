@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 import { SpaceCard } from "./SpaceCard";
-import { SpaceCategoryFilter, SpaceCategory } from "./SpaceCategoryFilter";
+import { SpaceCategoryFilter, SpaceCategory } from "../ui";
 import { RetroPanel } from "@/components/common/RetroPanel";
 import { RetroHeading } from "@/components/common/RetroHeading";
 import { RetroEmptyState } from "@/components/common/RetroEmptyState";

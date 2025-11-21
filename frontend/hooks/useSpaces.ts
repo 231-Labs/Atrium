@@ -91,6 +91,22 @@ export function useSpaces() {
 
   useEffect(() => {
     loadSpaces();
+    
+    // Listen for space creation events
+    const handleSpaceCreated = () => {
+      console.log('🔔 Space created event received, refreshing space list...');
+      loadSpaces();
+    };
+    
+    if (typeof window !== 'undefined') {
+      window.addEventListener('atrium-space-created', handleSpaceCreated as EventListener);
+    }
+    
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('atrium-space-created', handleSpaceCreated as EventListener);
+      }
+    };
   }, []);
 
   return {

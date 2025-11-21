@@ -22,9 +22,15 @@ export {
   SUBSCRIPTION_REGISTRY_ID,
 };
 
-export const mintIdentity = (username: string, bio: string, avatarBlobId: string, imageBlobId: string) => {
+export const mintIdentity = (
+  username: string,
+  bio: string,
+  avatarBlobId: string,
+  imageBlobId: string,
+  recipientAddress: string
+) => {
   const tx = new Transaction();
-  tx.moveCall({
+  const [identity] = tx.moveCall({
     target: `${PACKAGE_ID}::identity::mint_identity`,
     arguments: [
       tx.object(IDENTITY_REGISTRY_ID),
@@ -35,6 +41,10 @@ export const mintIdentity = (username: string, bio: string, avatarBlobId: string
       tx.object(SUI_CLOCK),
     ],
   });
+  
+  // Transfer Identity NFT to recipient
+  tx.transferObjects([identity], recipientAddress);
+  
   return tx;
 };
 
@@ -97,21 +107,15 @@ export const initializeSpace = (
 ) => {
   const tx = new Transaction();
   
-  // 1. Create Marketplace Kiosk (for NFT trading in 3D scene)
-  const [marketplaceKiosk, marketplaceKioskCap] = tx.moveCall({
-    target: "0x2::kiosk::new",
-    arguments: [],
-  });
-
-  // 2. Prepare payment for initialization fee
+  // 1. Prepare payment for initialization fee
   const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(initPriceInMist)]);
 
-  // 3. Initialize Space (creates shared Space + SpaceOwnership NFT)
-  tx.moveCall({
+  // 2. Initialize Space (returns SpaceOwnership NFT, change, marketplace kiosk, kiosk cap)
+  // Note: Fee is automatically transferred to protocol treasury inside the contract
+  const [ownership, change, marketplaceKiosk, marketplaceKioskCap] = tx.moveCall({
     target: `${PACKAGE_ID}::space::initialize_space`,
     arguments: [
       tx.object(SPACE_REGISTRY_ID),
-      marketplaceKiosk,  // Marketplace Kiosk (for NFT trading)
       tx.pure.string(name),
       tx.pure.string(description),
       tx.pure.string(coverImageBlobId),
@@ -121,17 +125,22 @@ export const initializeSpace = (
       tx.object(SUI_CLOCK),
     ],
   });
+  
+  // 3. Transfer ownership to recipient
+  tx.transferObjects([ownership], recipientAddress);
+  
+  // 4. Transfer change back to recipient
+  tx.transferObjects([change], recipientAddress);
 
-  // 4. Share Marketplace Kiosk (anyone can view NFTs)
+  // 5. Share Marketplace Kiosk (anyone can view NFTs)
   tx.moveCall({
     target: "0x2::transfer::public_share_object",
     arguments: [marketplaceKiosk],
     typeArguments: ["0x2::kiosk::Kiosk"],
   });
 
-  // 5. Transfer Marketplace Kiosk Cap to the creator
-  // Note: SpaceOwnership NFT is automatically transferred to creator by the contract
-  tx.transferObjects([marketplaceKioskCap], tx.pure.address(recipientAddress));
+  // 6. Transfer Marketplace Kiosk Cap to the creator
+  tx.transferObjects([marketplaceKioskCap], recipientAddress);
 
   return tx;
 };
@@ -229,12 +238,15 @@ export const subscribeToSpace = (
   spaceId: string,
   priceInMist: number,
   durationDays: number,
+  subscriberAddress: string,
+  creatorAddress: string,
 ) => {
   const tx = new Transaction();
   const totalPrice = priceInMist * durationDays;
   const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(totalPrice)]);
   
-  tx.moveCall({
+  // Returns: (Subscription NFT, payment for creator, change)
+  const [subscription, paymentForCreator, change] = tx.moveCall({
     target: `${PACKAGE_ID}::subscription::subscribe`,
     arguments: [
       tx.object(SUBSCRIPTION_REGISTRY_ID),
@@ -246,40 +258,136 @@ export const subscribeToSpace = (
       tx.object(SUI_CLOCK),
     ],
   });
+  
+  // Transfer subscription NFT to subscriber
+  tx.transferObjects([subscription], subscriberAddress);
+  
+  // Transfer payment to creator
+  tx.transferObjects([paymentForCreator], creatorAddress);
+  
+  // Transfer change back to subscriber
+  tx.transferObjects([change], subscriberAddress);
+  
   return tx;
 };
 
 export const renewSubscription = (
   subscriptionId: string,
+  spaceId: string,
   priceInMist: number,
   durationDays: number,
+  subscriberAddress: string,
+  creatorAddress: string,
 ) => {
   const tx = new Transaction();
-  const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(priceInMist)]);
+  const totalPrice = priceInMist * durationDays;
+  const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(totalPrice)]);
   
-  tx.moveCall({
+  // Returns: (payment for creator, change)
+  const [paymentForCreator, change] = tx.moveCall({
     target: `${PACKAGE_ID}::subscription::renew_subscription`,
     arguments: [
+      tx.object(SUBSCRIPTION_REGISTRY_ID),
       tx.object(subscriptionId),
       paymentCoin,
+      tx.object(spaceId),
       tx.pure.u64(durationDays),
       tx.object(SUI_CLOCK),
+    ],
+  });
+  
+  // Transfer payment to creator
+  tx.transferObjects([paymentForCreator], creatorAddress);
+  
+  // Transfer change back to subscriber
+  tx.transferObjects([change], subscriberAddress);
+  
+  return tx;
+};
+
+/**
+ * Seal approve for content decryption
+ * Moved to subscription module to avoid circular dependency
+ * @param resourceIdBytes - Resource ID as bytes
+ * @param spaceId - Space object ID
+ * @param subscriptionRegistryId - SubscriptionRegistry object ID
+ */
+export const sealApproveBySubscription = (
+  resourceIdBytes: Uint8Array,
+  spaceId: string,
+  subscriptionRegistryId: string = SUBSCRIPTION_REGISTRY_ID,
+) => {
+  console.log('🔐 [sealApproveBySubscription] Building transaction with:', {
+    resourceIdBytesLength: resourceIdBytes.length,
+    resourceIdHex: Array.from(resourceIdBytes).map(b => b.toString(16).padStart(2, '0')).join(''),
+    spaceId,
+    spaceIdLength: spaceId.length,
+    subscriptionRegistryId,
+    packageId: PACKAGE_ID,
+  });
+  
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${PACKAGE_ID}::subscription::seal_approve`,
+    arguments: [
+      tx.pure.vector('u8', Array.from(resourceIdBytes)),
+      tx.object(spaceId),
+      tx.object(subscriptionRegistryId),
     ],
   });
   return tx;
 };
 
-export const sealApproveBySubscription = (
-  resourceIdBytes: Uint8Array,
-  spaceKioskId: string,
+/**
+ * Record content upload (emits ContentAdded event)
+ * @param spaceId - Space object ID
+ * @param ownershipId - SpaceOwnership NFT ID
+ * @param blobObjectId - Walrus blob object ID (0x7e7f...)
+ * @param blobId - Walrus blob ID for retrieval
+ * @param contentType - Type of content (video, essay, image)
+ * @param title - Content title
+ * @param description - Content description
+ * @param encrypted - Whether content is encrypted
+ * @param price - Price in SUI (will be converted to MIST)
+ * @param tags - Array of tags
+ */
+export const recordContent = (
+  spaceId: string,
+  ownershipId: string,
+  blobObjectId: string,
+  blobId: string,
+  contentType: 'video' | 'essay' | 'image',
+  title: string,
+  description: string,
+  encrypted: boolean,
+  price: number,
+  tags: string[]
 ) => {
   const tx = new Transaction();
+  
+  // Map content type to u8
+  const typeMap: Record<string, number> = { 
+    video: 1, 
+    essay: 2, 
+    image: 3 
+  };
+  
   tx.moveCall({
-    target: `${PACKAGE_ID}::space::seal_approve_by_subscription`,
+    target: `${PACKAGE_ID}::space::record_content`,
     arguments: [
-      tx.pure.vector('u8', Array.from(resourceIdBytes)),
-      tx.object(spaceKioskId),
+      tx.object(spaceId),
+      tx.object(ownershipId),
+      tx.pure.id(blobObjectId),
+      tx.pure.string(blobId),
+      tx.pure.u8(typeMap[contentType]),
+      tx.pure.string(title),
+      tx.pure.string(description),
+      tx.pure.bool(encrypted),
+      tx.pure.u64(Math.floor(price * MIST_PER_SUI)),
+      tx.pure.vector('string', tags),
+      tx.object(SUI_CLOCK),
     ],
   });
+  
   return tx;
 };

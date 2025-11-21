@@ -11,12 +11,11 @@ import { SubscribeButton } from "@/components/subscription/SubscribeButton";
 import { RetroPanel } from "@/components/common/RetroPanel";
 import { RetroButton } from "@/components/common/RetroButton";
 import { SpaceInfoCard } from "./SpaceInfoCard";
-import { SpaceTabNavigation } from "./SpaceTabNavigation";
-import { getAccessStatus } from "./AccessStatusIndicator";
-import { ContentList } from "./ContentList";
-import { ContentItemData } from "./ContentItem";
+import { LandingPageView } from "./LandingPageView";
+import { SpaceTabNavigation, getAccessStatus } from "../ui";
+import { ContentList, ContentItemData } from "../content";
 import { PACKAGE_ID } from "@/config/sui";
-import { LandingPageView } from "@/components/space/LandingPageView";
+import { useSpaceContents } from "@/hooks/useSpaceContents";
 
 // Window Manager
 import { useWindowManager } from "@/components/features/window-manager";
@@ -29,6 +28,7 @@ interface SpaceDetailProps {
     id: string;
     kioskId: string;
     kioskCapId?: string;
+    ownershipId?: string;  // SpaceOwnership NFT ID for PTB
     name: string;
     description: string;
     coverImage: string;
@@ -68,7 +68,14 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
   const [isContentMenuOpen, setIsContentMenuOpen] = useState(false);
   const [showSubscribeForm, setShowSubscribeForm] = useState(false);
   const [weatherMode, setWeatherMode] = useState<WeatherMode>('dynamic');
-  const [viewMode, setViewMode] = useState<'3d' | 'landing'>('3d');
+  
+  // Check if current user is the space creator (normalize addresses for comparison)
+  const isCreator = currentAccount?.address 
+    ? currentAccount.address.toLowerCase() === safeSpace.creator?.toLowerCase()
+    : false;
+  // SpaceDetail is always read-only (visitor view) - even for creators
+  // Creators should use SpacePreviewWindow (My Space) for editing
+  const [viewMode, setViewMode] = useState<'3d' | 'landing'>(isCreator ? 'landing' : '3d');
 
   // Window Manager
   const {
@@ -94,7 +101,6 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  const isCreator = currentAccount?.address === safeSpace.creator;
   const accessStatus = getAccessStatus(currentAccount, isSubscribed, isCreator);
 
   const handleEditSpace = () => {
@@ -162,8 +168,25 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
     setActiveTab("merch");
   };
 
-  // Mock content data - TODO: Load from chain
-  const contentItems: ContentItemData[] = [
+  // Load real content data from blockchain
+  const { contents: spaceContents } = useSpaceContents(safeSpace?.id || null);
+  
+  // Transform to ContentItemData format (filter out 'image' type as it's not supported in ContentItemData)
+  const contentItems: ContentItemData[] = spaceContents
+    .filter(c => c.type !== 'image') // ContentItemData doesn't support 'image' type
+    .map(c => ({
+      id: c.id,
+      title: c.title,
+      description: c.description,
+      type: c.type as 'video' | 'essay' | 'merch',
+      blobId: c.blobId,
+      isLocked: c.encrypted,
+      price: c.price,
+      sealResourceId: c.sealResourceId, // Pass Seal resourceId for decryption
+    }));
+  
+  // Fallback mock data for empty spaces
+  const mockContentItems: ContentItemData[] = [
     // Merch items
     {
       id: "merch-1",
@@ -232,30 +255,64 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
     setShowSubscribeForm(true);
   };
 
+  // Use real data if available, otherwise use mock
+  const displayItems = contentItems.length > 0 ? contentItems : mockContentItems;
+
   const handleViewContent = (itemId: string) => {
-    console.log("View content:", itemId);
-    const item = contentItems.find(i => i.id === itemId);
-    if (!item) return;
+    console.log("📖 [SpaceDetail] View content:", itemId);
+    const item = displayItems.find(i => i.id === itemId);
+    if (!item) {
+      console.error('Content not found:', itemId);
+      return;
+    }
+
+    console.log('📖 [SpaceDetail] Opening content:', {
+      id: item.id,
+      blobId: item.blobId,
+      title: item.title,
+      isLocked: item.isLocked,
+      spaceId: safeSpace.id,
+      kioskId: safeSpace.kioskId,
+      fullSafeSpace: safeSpace,
+    });
+
+    // Use blobId if available, otherwise fallback to id (for mock data)
+    const actualBlobId = item.blobId || item.id;
+    const spaceId = safeSpace.id;
+    
+    if (!spaceId || spaceId === '') {
+      console.error('❌ [SpaceDetail] No valid Space ID available!');
+      alert('Cannot open content: Space ID is missing');
+      return;
+    }
+    
+    console.log('📖 [SpaceDetail] Opening content:', {
+      contentId: item.id,
+      contentLocked: item.isLocked,
+      spaceId,
+      blobId: actualBlobId,
+    });
 
     // Open appropriate window with item data
+    // Seal encryption ID will be automatically extracted from the encrypted blob
     if (item.type === 'video') {
       openWindow('video-player', {
         title: item.title,
         data: {
-          blobId: item.id,
-          resourceId: item.id,
+          blobId: actualBlobId,
+          spaceId: spaceId,
           title: item.title,
-          isLocked: item.isLocked,
+          isLocked: item.isLocked || false,
         }
       });
     } else if (item.type === 'essay') {
       openWindow('essay-reader', {
         title: item.title,
         data: {
-          blobId: item.id,
-          resourceId: item.id,
+          blobId: actualBlobId,
+          spaceId: spaceId,
           title: item.title,
-          isLocked: item.isLocked,
+          isLocked: item.isLocked || false,
         }
       });
     }
@@ -275,6 +332,7 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
       alert("Failed to copy to clipboard");
     }
   };
+
 
   return (
     <div className="h-screen bg-gray-100 flex flex-col overflow-hidden" style={{ fontFamily: 'Georgia, serif' }}>
@@ -302,7 +360,7 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
             content = (
               <EssayWindow
                 blobId={window.data?.blobId}
-                resourceId={window.data?.resourceId}
+                spaceId={window.data?.spaceId}
                 title={window.data?.title}
                 isLocked={window.data?.isLocked}
               />
@@ -356,6 +414,7 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
                         <SubscribeButton
                           spaceKioskId={safeSpace.kioskId}
                           spaceKioskCapId={safeSpace.kioskCapId || safeSpace.kioskId}
+                          creatorAddress={safeSpace.creator}
                           price={safeSpace.subscriptionPrice}
                           identityId={identityId}
                           onSubscribed={() => {
@@ -385,7 +444,7 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
                       </div>
                     ) : (
                       <ContentList
-                        items={contentItems}
+                        items={displayItems}
                         type={activeTab as "merch" | "video" | "essay"}
                         isSubscribed={isSubscribed}
                         isCreator={isCreator}
@@ -502,6 +561,7 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
                     <SubscribeButton
                       spaceKioskId={safeSpace.kioskId}
                       spaceKioskCapId={safeSpace.kioskCapId || safeSpace.kioskId}
+                      creatorAddress={safeSpace.creator}
                       price={safeSpace.subscriptionPrice}
                       identityId={identityId}
                       onSubscribed={() => {
@@ -524,7 +584,7 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
                     )}
                     
                     <ContentList
-                      items={contentItems}
+                      items={displayItems}
                       type={activeTab === "subscribe" ? "merch" : (activeTab as "merch" | "video" | "essay")}
                       isSubscribed={isSubscribed}
                       isCreator={isCreator}
@@ -606,17 +666,20 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
           ) : (
             <LandingPageView 
               space={safeSpace}
-              contentItems={contentItems}
+              contentItems={displayItems}
               isSubscribed={isSubscribed}
               isCreator={isCreator}
               onUnlock={handleUnlockContent}
               onView={handleViewContent}
-              onUpload={isCreator ? handleEditSpace : undefined}
+              // onUpload is intentionally not passed - SpaceDetail is read-only view for all users
+              // Upload functionality is only available in SpacePreviewWindow (creator's edit mode)
             />
           )}
 
         </div>
       </div>
+
+      {/* Content Upload is not available in SpaceDetail - only in SpacePreviewWindow */}
     </div>
   );
 }

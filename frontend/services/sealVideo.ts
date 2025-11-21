@@ -8,15 +8,11 @@ import { encryptContent, downloadAndDecryptContent, ContentEncryptionOptions } f
 export async function encryptVideo(
   file: File | Blob,
   options: ContentEncryptionOptions,
-  userAddress: string,
-  signPersonalMessage: (message: Uint8Array) => Promise<{ signature: string }>,
   network: 'testnet' | 'mainnet' = 'testnet'
 ) {
   return encryptContent(
     file,
     { ...options, contentType: 'video/mp4' },
-    userAddress,
-    signPersonalMessage,
     network
   );
 }

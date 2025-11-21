@@ -1,114 +1,160 @@
 # Atrium 🏛️
 
-Web3 版創作者平台 - 結合 3D 互動空間的去中心化 Patreon
+> **Web3 creator platform with AI-powered dynamic 3D spaces**
 
-## 專案簡介
+Atrium is a decentralized creator platform where artists showcase their work in immersive 3D galleries. What makes it unique: an **AI Weather System** that transforms gallery atmospheres in real-time based on crypto market data.
 
-Atrium 是一個創新的 Web3 平台，讓創作者擁有個人的 3D 展示空間，粉絲訂閱後可以在空間中放置自己的 AI 生成 3D 化身。
+---
 
-### 核心功能
+## 🌟 Key Features
 
-- 🎭 **身份系統**: 連接錢包註冊，AI 生成 3D 化身
-- 🏠 **創作者空間**: 個人 3D 環境，可擺放 NFT 和粉絲化身
-- 💳 **訂閱系統**: Web3 訂閱解鎖專屬內容
-- 🎬 **加密影片**: 使用 Seal 加密保護創作者內容
-- 🎨 **3D 互動**: PlayCanvas 引擎打造沉浸式體驗
+- 🌤️ **AI Weather System** - Gallery ambiance adapts to crypto market conditions (BTC, ETH, SUI, WAL)
+- 🎨 **NFT Integration** - Built on Sui Kiosk standard for seamless NFT display
+- 🔐 **Encrypted Content** - Seal encryption for subscriber-only videos and media
+- 💎 **Subscription Economy** - Direct creator payments with on-chain verification
+- ⚡ **Decentralized Storage** - Walrus for permanent, censorship-resistant content
 
-## 技術棧
+---
 
-- **區塊鏈**: Sui (身份、NFT、訂閱、支付)
-- **存儲**: Walrus (影片、3D 模型、配置)
-- **加密**: Seal (訂閱內容保護)
-- **3D 引擎**: PlayCanvas
-- **AI 服務**: Meshy.ai (2D → 3D 生成)
-- **前端**: Next.js 14 + Tailwind CSS
+## Tech Stack
 
-## 快速開始
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| **Blockchain** | Sui | Identity, spaces, subscriptions |
+| **Storage** | Walrus | Decentralized storage for media |
+| **Encryption** | Seal | Content protection |
+| **3D Rendering** | Three.js | WebGL-based 3D scenes |
+| **Frontend** | Next.js 14 | React framework |
+| **Styling** | Tailwind CSS | Utility-first CSS |
+| **DATA x AI** | CoinGecko + POE | Market-driven weather |
 
-### 前置需求
+---
 
-- Node.js 18+
-- Sui CLI
-- Meshy API Key (從 https://meshy.ai 獲取)
+## 🚀 Quick Start
 
-### 安裝
+### Prerequisites
 
 ```bash
-# 克隆專案
-git clone https://github.com/your-username/atrium.git
-cd atrium
+Node.js 18+
+Sui Wallet (browser extension)
+```
 
-# 安裝前端依賴
-cd frontend
+### Installation
+
+```bash
+# Clone repository
+git clone https://github.com/yourusername/atrium.git
+cd atrium/frontend
+
+# Install dependencies
 npm install
 
-# 設置環境變數
+# Configure environment
 cp .env.example .env.local
-# 編輯 .env.local 填入你的 API keys
 ```
 
-### 開發
+Edit `.env.local`:
 
-```bash
-# 啟動前端
-cd frontend
-npm run dev
+```env
+NEXT_PUBLIC_SUI_NETWORK=testnet
+NEXT_PUBLIC_PACKAGE_ID=0x...
+POE_API_KEY=your_poe_api_key
 ```
+---
 
-訪問 http://localhost:3000
-
-### 部署合約
-
-```bash
-cd contract
-sui move build
-sui client publish --gas-budget 100000000
-```
-
-## 專案結構
+## 📁 Project Structure
 
 ```
 atrium/
-├── contract/              # Sui Move 智能合約
-│   └── sources/
-│       ├── identity.move       # 身份 NFT
-│       ├── space.move          # 空間管理
-│       ├── subscription.move   # 訂閱系統
-│       └── avatar.move         # 化身綁定
-├── frontend/              # Next.js 前端
-│   ├── app/              # Next.js App Router
-│   ├── components/       # React 元件
-│   ├── config/           # 配置文件
-│   ├── services/         # API 服務
-│   └── utils/            # 工具函數
-└── README.md
+├── contract/                   # Sui Move contracts
+│   ├── sources/
+│   │   ├── identity.move      # User identity NFTs
+│   │   ├── space.move         # Gallery spaces (Kiosk-based)
+│   │   └── subscription.move  # Subscription system
+│   └── Move.toml
+│
+├── frontend/
+│   ├── app/
+│   │   ├── page.tsx           # Landing page
+│   │   ├── space/[id]/        # Gallery detail view
+│   │   └── api/ai-weather/    # Weather API endpoint
+│   │
+│   ├── components/
+│   │   ├── 3d/                # Three.js components
+│   │   │   ├── ThreeScene.tsx
+│   │   │   ├── AIWeatherIndicator.tsx
+│   │   │   └── GLBViewer.tsx
+│   │   ├── space/             # Gallery components
+│   │   │   ├── display/       # Space list, cards, detail
+│   │   │   ├── content/       # Content upload, manager
+│   │   │   └── creation/      # Space creation flow
+│   │   └── common/            # Retro UI components
+│   │
+│   ├── lib/three/
+│   │   ├── SceneManager.ts    # Core 3D scene management
+│   │   ├── effects/           # Weather & water effects
+│   │   └── TransformControls.ts
+│   │
+│   ├── services/
+│   │   ├── aiWeatherClient.ts # Weather API client
+│   │   ├── chainDataApi.ts    # CoinGecko integration
+│   │   ├── walrusApi.ts       # Walrus storage
+│   │   ├── sealVideo.ts       # Seal encryption
+│   │   └── timeFactors.ts     # Market time analysis
+│   │
+│   └── hooks/
+│       ├── useAIWeather.ts    # Weather state management
+│       ├── useSpace.ts        # Space data fetching
+│       └── useIdentity.ts     # User identity
+│
+└── docs/
+    ├── AI_WEATHER_SYSTEM.md   # Weather system guide
+    └── PROJECT_SUMMARY.md     # Detailed project info
 ```
 
-## 使用流程
+---
 
-1. **註冊身份**
-   - 連接 Sui 錢包
-   - 上傳 2D 頭像
-   - AI 生成 3D 化身
-   - Mint 身份 NFT
+## 🎮 User Flows
 
-2. **成為創作者**
-   - 支付初始化費用
-   - 創建個人 3D 空間
-   - 上傳加密內容
-   - 設定訂閱價格
+### For Creators
 
-3. **粉絲訂閱**
-   - 瀏覽創作者空間
-   - 支付訂閱費用
-   - 化身進入空間
-   - 解鎖專屬內容
+1. **Create Identity**
+   - Connect Sui wallet
+   - Upload profile image to Walrus
+   - Mint Identity NFT
 
-## 開發團隊
+2. **Initialize Gallery Space**
+   - Pay 0.1 SUI initialization fee
+   - Upload cover image
+   - Configure 3D scene
+   - Set subscription price
 
-- Harper De La Viga
+3. **Upload Content**
+   - Add videos/images
+   - Encrypt with Seal
+   - Store on Walrus
+   - Place NFTs in gallery
 
-## License
+4. **Manage Subscribers**
+   - View subscriber avatars in space
+   - Update gallery layout
+   - Release new content
 
-MIT
+### For Fans
+
+1. **Create Identity**
+   - Connect wallet
+   - Upload profile image
+   - Mint Identity NFT
+
+2. **Explore Galleries**
+   - Browse creator spaces
+   - Experience dynamic weather
+   - Preview public content
+
+3. **Subscribe**
+   - Pay subscription fee in SUI
+   - Gain access to encrypted content
+   - Avatar appears in creator's gallery
+
 

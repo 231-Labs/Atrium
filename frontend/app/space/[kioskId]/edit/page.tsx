@@ -1,23 +1,33 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
 import { RetroPanel } from "@/components/common/RetroPanel";
 import { RetroButton } from "@/components/common/RetroButton";
-import { RetroHeading } from "@/components/common/RetroHeading";
 import { ThreeScene } from "@/components/3d/ThreeScene";
 import { RetroFrameCanvas } from "@/components/3d/RetroFrameCanvas";
-import { NFTListPanel } from "@/components/space/NFTListPanel";
-import { ContentManager } from "@/components/space/ContentManager";
-import { ScreenConfig } from "@/components/space/ScreenConfig";
+import { NFTListPanel } from "@/components/space/nft";
+import { ContentManager } from "@/components/space/content";
+import { ScreenConfig } from "@/components/space/creation";
 import { useSpace } from "@/hooks/useSpace";
 import { useUserSpaces } from "@/hooks/useUserSpaces";
 import { useSpaceEditor } from "@/hooks/useSpaceEditor";
+import { useKioskManagement } from "@/hooks/useKioskManagement";
 import { useWalletSignature } from "@/hooks/useWalletSignature";
 import { serializeConfig, uploadConfigToWalrus, downloadConfigFromWalrus } from "@/utils/spaceConfig";
 import { updateSpaceConfig, SUI_CHAIN } from "@/utils/transactions";
-import { SceneObject } from "@/types/spaceEditor";
+import { SceneObject, ObjectTransform } from "@/types/spaceEditor";
+import { Model3DItem, ThreeSceneApi } from "@/types/three";
+import { getWalrusBlobUrl } from "@/config/walrus";
+
+// Temporary helper to normalize object type for UI display
+const normalizeObjectType = (type: string) => {
+  // The backend might return different casing or values
+  const t = type.toLowerCase();
+  if (t === '3d' || t === 'glb' || t === 'gltf') return '3d';
+  return '2d';
+};
 
 export default function SpaceEditPage() {
   const params = useParams();
@@ -35,6 +45,9 @@ export default function SpaceEditPage() {
   const [isVerified, setIsVerified] = useState(false);
   const [visibleNFTs, setVisibleNFTs] = useState<Set<string>>(new Set());
   const [objectTransforms, setObjectTransforms] = useState(new Map());
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  
+  const threeSceneRef = useRef<ThreeSceneApi>(null);
 
   const ownershipNFT = userSpaces.find(s => s.spaceId === spaceId);
 
@@ -42,10 +55,18 @@ export default function SpaceEditPage() {
     state: editorState,
     setEditMode,
     toggleObjectVisibility,
+    updateObjectTransform,
     updateObjectScale,
     getAllObjects,
     setObjects,
+    addObject,
   } = useSpaceEditor();
+
+  // 獲取 Kiosk 中的 NFT 列表
+  const { nfts } = useKioskManagement({
+    kioskId: space?.marketplaceKioskId || null,
+    enabled: !!space?.marketplaceKioskId,
+  });
 
   useEffect(() => {
     if (spaceId && currentAccount) {
@@ -58,6 +79,60 @@ export default function SpaceEditPage() {
       loadConfig();
     }
   }, [space?.configQuilt]);
+
+  // Ensure all visible NFTs have transform data initialized
+  useEffect(() => {
+    if (visibleNFTs.size === 0) return;
+    
+    let needsUpdate = false;
+    const updates = new Map(objectTransforms);
+    
+    visibleNFTs.forEach(nftId => {
+      if (!updates.has(nftId)) {
+        updates.set(nftId, {
+          position: [0, 1, 0],
+          rotation: [0, 0, 0],
+          scale: 1,
+        });
+        needsUpdate = true;
+      }
+    });
+    
+    if (needsUpdate) {
+      setObjectTransforms(updates);
+    }
+  }, [visibleNFTs, objectTransforms]);
+
+  // 將可見的 NFT 轉換成 3D 模型列表
+  const visibleModels = useMemo<Model3DItem[]>(() => {
+    return nfts
+      .filter(nft => visibleNFTs.has(nft.id))
+      .map(nft => {
+        const transform = objectTransforms.get(nft.id);
+        
+        return {
+          id: nft.id,
+          name: nft.id, // Use ID for reliable picking
+          modelUrl: nft.glbFile ? getWalrusBlobUrl(nft.glbFile) : (nft.imageUrl || ''), // Use image URL for 2D items if needed
+          is2D: normalizeObjectType(nft.objectType) === '2d', // Pass 2D flag
+          position: transform ? {
+            x: transform.position[0],
+            y: transform.position[1],
+            z: transform.position[2],
+          } : { x: 0, y: 1, z: 0 },
+          rotation: transform ? {
+            x: transform.rotation[0],
+            y: transform.rotation[1],
+            z: transform.rotation[2],
+          } : { x: 0, y: 0, z: 0 },
+          scale: transform ? {
+            x: transform.scale,
+            y: transform.scale,
+            z: transform.scale,
+          } : { x: 1, y: 1, z: 1 },
+        };
+      });
+  }, [nfts, visibleNFTs, objectTransforms]);
 
   const checkOwnership = async () => {
     const verified = await verifyOwnership(spaceId);
@@ -132,6 +207,123 @@ export default function SpaceEditPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Handle Edit button click from NFT panel
+  const handleEditTransform = useCallback((nftId: string) => {
+    if (!threeSceneRef.current) return;
+    
+    // Toggle selection
+    if (selectedModelId === nftId) {
+      setSelectedModelId(null);
+      threeSceneRef.current.detachTransformControls();
+    } else {
+      setSelectedModelId(nftId);
+      
+      // Attach transform controls to the model
+      const success = threeSceneRef.current.attachTransformControlsById(nftId);
+      
+      if (!success) {
+        console.warn('Could not find model:', nftId);
+      }
+    }
+  }, [selectedModelId]);
+
+  // Handle transform changes from SceneManager (drag/gizmo)
+  const handleTransformChange = useCallback(() => {
+    if (!threeSceneRef.current || !selectedModelId) return;
+      
+      const sceneState = threeSceneRef.current.getSceneState();
+      const selectedModel = sceneState.find(m => m.id === selectedModelId);
+      
+      if (selectedModel && selectedModel.position) {
+        setObjectTransforms(prev => {
+          const next = new Map(prev);
+          const current = next.get(selectedModelId) || { position: [0, 0, 0], rotation: [0, 0, 0], scale: 1 };
+          
+          const newPos = [selectedModel.position.x, selectedModel.position.y, selectedModel.position.z];
+        const newRot = [selectedModel.rotation.x, selectedModel.rotation.y, selectedModel.rotation.z];
+        const newScale = selectedModel.scale.x; // Assuming uniform scale for now, or take x
+
+        // Check if anything changed
+        if (
+          JSON.stringify(current.position) !== JSON.stringify(newPos) ||
+          JSON.stringify(current.rotation) !== JSON.stringify(newRot) ||
+          current.scale !== newScale
+        ) {
+            next.set(selectedModelId, {
+              ...current,
+              position: newPos as [number, number, number],
+            rotation: newRot as [number, number, number],
+            scale: newScale,
+            });
+            return next;
+          }
+          return prev;
+        });
+      }
+  }, [selectedModelId]);
+
+  // Register callbacks
+  useEffect(() => {
+    if (threeSceneRef.current) {
+      threeSceneRef.current.setTransformCallbacks(
+        undefined, // onDraggingChanged
+        handleTransformChange
+      );
+    }
+  }, [handleTransformChange]);
+
+  // Handle transform changes from UI (NFT Panel)
+  const handleTransformUpdate = useCallback((nftId: string, transform: ObjectTransform) => {
+    // Update local transform state
+    setObjectTransforms(prev => {
+      const next = new Map(prev);
+      next.set(nftId, transform);
+      return next;
+    });
+    
+    // Update useSpaceEditor state (this triggers 3D model re-render)
+    updateObjectTransform(nftId, transform);
+    
+    // Also update 3D scene directly for immediate visual feedback
+    if (threeSceneRef.current) {
+      threeSceneRef.current.updateModelPosition(nftId, {
+        x: transform.position[0],
+        y: transform.position[1],
+        z: transform.position[2],
+      });
+      threeSceneRef.current.updateModelRotation(nftId, {
+        x: transform.rotation[0],
+        y: transform.rotation[1],
+        z: transform.rotation[2],
+      });
+      threeSceneRef.current.updateModelScale(nftId, {
+        x: transform.scale,
+        y: transform.scale,
+        z: transform.scale,
+      });
+    }
+  }, [updateObjectTransform]);
+
+  const selectedTransform = useMemo(() => {
+    if (!selectedModelId) return {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 }
+    };
+    
+    const t = objectTransforms.get(selectedModelId) || { position: [0, 1, 0], rotation: [0, 0, 0], scale: 1 };
+    return {
+      position: { x: t.position[0], y: t.position[1], z: t.position[2] },
+      rotation: { x: t.rotation[0], y: t.rotation[1], z: t.rotation[2] },
+      scale: { x: t.scale, y: t.scale, z: t.scale }
+    };
+  }, [selectedModelId, objectTransforms]);
+
+  const handleClosePanel = () => {
+    setSelectedModelId(null);
+    threeSceneRef.current?.detachTransformControls();
   };
 
   if (loading || isVerifying) {
@@ -234,7 +426,12 @@ export default function SpaceEditPage() {
               kioskId={space.marketplaceKioskId}
               visibleNFTs={visibleNFTs}
               objectTransforms={objectTransforms}
+              selectedNFTId={selectedModelId}
+              onEditTransform={handleEditTransform}
+              onTransformChange={handleTransformUpdate}
               onToggleVisibility={(nftId) => {
+                const isCurrentlyVisible = visibleNFTs.has(nftId);
+                
                 setVisibleNFTs(prev => {
                   const next = new Set(prev);
                   if (next.has(nftId)) {
@@ -244,7 +441,41 @@ export default function SpaceEditPage() {
                   }
                   return next;
                 });
-                toggleObjectVisibility(nftId);
+
+                // 如果是首次顯示，將 NFT 添加到 editor state 並初始化 transform
+                if (!isCurrentlyVisible) {
+                  const nft = nfts.find(n => n.id === nftId);
+                  if (nft) {
+                    const initialTransform = {
+                      position: [0, 1, 0] as [number, number, number],
+                      rotation: [0, 0, 0] as [number, number, number],
+                      scale: 1,
+                    };
+                    
+                    // Initialize transform data (force set even if exists)
+                    setObjectTransforms(prev => {
+                      const next = new Map(prev);
+                      // Only initialize if not already set
+                      if (!next.has(nftId)) {
+                        next.set(nftId, initialTransform);
+                      }
+                      return next;
+                    });
+                    
+                    addObject({
+                      id: nftId,
+                      nftId: nftId,
+                      objectType: nft.objectType,
+                      name: nft.name,
+                      thumbnail: nft.imageUrl,
+                      transform: initialTransform,
+                      visible: true,
+                    });
+                  }
+                } else {
+                  // When hiding, just toggle visibility
+                  toggleObjectVisibility(nftId);
+                }
               }}
               onScaleChange={(nftId, scale) => {
                 updateObjectScale(nftId, scale);
@@ -259,7 +490,12 @@ export default function SpaceEditPage() {
         <div className="md:hidden flex-1 overflow-hidden">
           {activeTab === 'scene' && (
             <RetroFrameCanvas className="h-full">
-              <ThreeScene spaceId={spaceId} enableGallery={true} />
+              <ThreeScene 
+                ref={threeSceneRef}
+                spaceId={spaceId} 
+                models={visibleModels}
+                enableGallery={true} 
+              />
             </RetroFrameCanvas>
           )}
           {activeTab === 'nfts' && (
@@ -268,7 +504,12 @@ export default function SpaceEditPage() {
                 kioskId={space.marketplaceKioskId}
                 visibleNFTs={visibleNFTs}
                 objectTransforms={objectTransforms}
+                selectedNFTId={selectedModelId}
+                onEditTransform={handleEditTransform}
+                onTransformChange={handleTransformUpdate}
                 onToggleVisibility={(nftId) => {
+                  const isCurrentlyVisible = visibleNFTs.has(nftId);
+                  
                   setVisibleNFTs(prev => {
                     const next = new Set(prev);
                     if (next.has(nftId)) {
@@ -278,7 +519,37 @@ export default function SpaceEditPage() {
                     }
                     return next;
                   });
-                  toggleObjectVisibility(nftId);
+
+                  // 如果是首次顯示，將 NFT 添加到 editor state 並初始化 transform
+                  if (!isCurrentlyVisible) {
+                    const nft = nfts.find(n => n.id === nftId);
+                    if (nft) {
+                      const initialTransform = {
+                        position: [0, 1, 0] as [number, number, number],
+                        rotation: [0, 0, 0] as [number, number, number],
+                        scale: 1,
+                      };
+                      
+                      // Initialize transform data
+                      setObjectTransforms(prev => {
+                        const next = new Map(prev);
+                        next.set(nftId, initialTransform);
+                        return next;
+                      });
+                      
+                      addObject({
+                        id: nftId,
+                        nftId: nftId,
+                        objectType: nft.objectType,
+                        name: nft.name,
+                        thumbnail: nft.imageUrl,
+                        transform: initialTransform,
+                        visible: true,
+                      });
+                    }
+                  } else {
+                    toggleObjectVisibility(nftId);
+                  }
                 }}
                 onScaleChange={(nftId, scale) => updateObjectScale(nftId, scale)}
                 onList={(nftId) => console.log('List NFT:', nftId)}
@@ -303,7 +574,12 @@ export default function SpaceEditPage() {
         {/* Desktop: 3D Scene */}
         <div className="hidden md:flex flex-1 flex-col">
           <RetroFrameCanvas className="flex-1">
-            <ThreeScene spaceId={spaceId} enableGallery={true} />
+            <ThreeScene 
+              ref={threeSceneRef}
+              spaceId={spaceId} 
+              models={visibleModels}
+              enableGallery={true} 
+            />
           </RetroFrameCanvas>
 
           <RetroPanel className="p-4 rounded-none border-t">

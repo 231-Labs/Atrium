@@ -7,7 +7,7 @@ import { RetroSelect } from '@/components/common/RetroSelect';
 import { ExplorerLink } from '@/components/common/ExplorerLink';
 import { useState, useEffect } from 'react';
 import { bindAvatar, updateImage, updateBio } from '@/utils/transactions';
-import { uploadToWalrus } from '@/services/walrusApi';
+import { uploadBlobToWalrus } from '@/services/walrusApi';
 import { useKioskData } from '@/hooks/useKioskData';
 import { useIdentity } from '@/hooks/useIdentity';
 import { getIdentityImageBlobId } from '@/utils/identity-helpers';
@@ -77,7 +77,7 @@ export function SettingsPage() {
     
     try {
       setImageUploadStatus("Uploading to Walrus...");
-      const blobId = await uploadToWalrus(imageFile);
+      const blobId = await uploadBlobToWalrus(imageFile);
 
       setImageUploadStatus("Updating Identity...");
       const tx = updateImage(identity.id, blobId);
@@ -111,7 +111,7 @@ export function SettingsPage() {
     
     try {
       setGlbUploadStatus("Uploading to Walrus...");
-      const blobId = await uploadToWalrus(glbFile);
+      const blobId = await uploadBlobToWalrus(glbFile);
 
       setGlbUploadStatus("Updating Identity...");
       const tx = bindAvatar(identity.id, blobId);

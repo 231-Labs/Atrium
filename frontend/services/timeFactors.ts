@@ -177,7 +177,7 @@ class TimeFactorsService {
 
     if (hour >= 12 && hour < 14) {
       return {
-        skyColorModifier: '#FFF8E7', // Cosmic Latte (極淡的奶油色，柔和的正午陽光)
+        skyColorModifier: '#E6F2FF', // Light blue-white (避免黃色調，保持中性)
         lightingModifier: 1.2,
         moodTendency: 'energetic',
         description: 'Noon, blazing sun',
@@ -186,7 +186,7 @@ class TimeFactorsService {
 
     if (hour >= 14 && hour < 18) {
       return {
-        skyColorModifier: '#F5F5DC', // Beige (更柔和的米白色，不會太黃)
+        skyColorModifier: '#E8F0F7', // Soft blue-grey (更中性，不會太黃)
         lightingModifier: 0.9,
         moodTendency: 'calm',
         description: 'Afternoon, gentle breeze',
@@ -390,19 +390,25 @@ class TimeFactorsService {
     // Clone params
     const newParams = { ...params };
     
+    // CRITICAL: Don't override colors for bad weather (rainy/stormy)
+    // Market conditions should take precedence over time of day
+    const isStrongWeather = ['rainy', 'stormy', 'foggy'].includes(params.weatherType);
+    
     // 1. Apply Sky Color base on time (Override AI's choice to ensure Day/Night feel)
-    if (timeTendency.skyColorModifier) {
+    // BUT: Only override if weather is neutral (sunny/cloudy)
+    if (timeTendency.skyColorModifier && !isStrongWeather) {
       // Blend AI color with Time color? Or just replace?
       // Replacing ensures the day/night cycle is respected.
       newParams.skyColor = timeTendency.skyColorModifier;
     }
     
     // 2. Adjust intensities based on time
+    // BUT: Preserve weather-driven lighting for rainy/stormy/foggy
     if (hour >= 20 || hour < 5) {
         // Deep Night
         newParams.sunIntensity = 0.1; // Moon light
         newParams.ambientIntensity = 0.2;
-        newParams.fogColor = '#0a0a1a'; // Very dark fog
+        newParams.fogColor = isStrongWeather ? newParams.fogColor : '#0a0a1a'; // Keep weather fog
         newParams.sunColor = '#E6E6FA'; // Lavender/Moon color
         
         // If it was sunny, make it clear night
@@ -411,19 +417,29 @@ class TimeFactorsService {
         }
     } else if (hour >= 5 && hour < 7) {
         // Dawn
-        newParams.sunIntensity = 0.6;
-        newParams.ambientIntensity = 0.5;
-        newParams.sunColor = '#FF7F50'; // Coral sun
+        if (!isStrongWeather) {
+          newParams.sunIntensity = 0.6;
+          newParams.ambientIntensity = 0.5;
+          newParams.sunColor = '#FF7F50'; // Coral sun
+        }
+        // Keep weather lighting if it's rainy/stormy
     } else if (hour >= 18 && hour < 20) {
         // Dusk
-        newParams.sunIntensity = 0.6;
-        newParams.ambientIntensity = 0.5;
-        newParams.sunColor = '#FF4500'; // Orange Red
+        if (!isStrongWeather) {
+          newParams.sunIntensity = 0.6;
+          newParams.ambientIntensity = 0.5;
+          newParams.sunColor = '#FF4500'; // Orange Red
+        }
+        // Keep weather lighting if it's rainy/stormy
     } else {
         // Day time (7-18)
-        // Ensure it's bright enough
-        newParams.sunIntensity = Math.max(newParams.sunIntensity || 1, 1.0);
-        newParams.ambientIntensity = Math.max(newParams.ambientIntensity || 0.5, 0.6);
+        // ONLY brighten if weather is neutral (not rainy/stormy)
+        if (!isStrongWeather) {
+          // Ensure it's bright enough for sunny/cloudy days
+          newParams.sunIntensity = Math.max(newParams.sunIntensity || 1, 1.0);
+          newParams.ambientIntensity = Math.max(newParams.ambientIntensity || 0.5, 0.6);
+        }
+        // Keep dim lighting for rainy/stormy weather even during daytime
     }
 
     // 3. Special handling for particles/fog density during night

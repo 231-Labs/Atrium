@@ -59,11 +59,11 @@ export interface StageThemeConfig {
  */
 export const STATIC_WEATHER_CONFIGS = {
   day: {
-    skyColor: '#f5f3ed',
+    skyColor: '#f0f8ff', // Alice Blue (Cooler, clearer day)
     fogDensity: 0.15,
-    fogColor: '#f5f3ed',
+    fogColor: '#f0f8ff',
     sunIntensity: 1.2,
-    sunColor: '#fff5e0',
+    sunColor: '#ffffff', // Pure white sunlight
     ambientIntensity: 0.6,
     weatherType: 'sunny' as const,
     particleIntensity: 0.2,
@@ -112,49 +112,47 @@ export const STATIC_WEATHER_CONFIGS = {
 
 export const STAGE_THEMES: Record<StageTheme, StageThemeConfig> = {
   light: {
-    // Background - warm neutral cream
-    backgroundColor: 0xf5f3ed,
-    fogColor: 0xf5f3ed,
+    // Background - cooler clear day (Architectural clarity)
+    backgroundColor: 0xf0f8ff, // Alice Blue
+    fogColor: 0xf0f8ff,
     fogNear: 25,
     fogFar: 70,
 
     // Platform - smooth reflective surface
-    platformColor: 0xf5f3ed,
+    platformColor: 0xf0f8ff,
     platformRoughness: 0.15,
     platformMetalness: 0.4,
     platformOpacity: 0.98,
-    rimColor: 0xff6b35,
+    rimColor: 0xff8844, // Vibrant Orange (Daytime Accent - unchanged)
     rimOpacity: 0.35,
 
-    // Grid - warm taupe
-    gridColor1: 0xd4cfc4,
-    gridColor2: 0xe8e4db,
+    // Grid - cool grey
+    gridColor1: 0xd4d8e0,
+    gridColor2: 0xe8eaf0,
     gridOpacity: 0.3,
 
-    // Lights - warm studio lighting (reduced for better particle visibility)
-    mainLightColor: 0xfff5e0,
+    // Lights - Clean studio lighting
+    mainLightColor: 0xffffff,
     mainLightIntensity: 1.2,
-    sideLightColor: 0xffd4a3,
+    sideLightColor: 0xffeebb,
     sideLightIntensity: 0.8,
-    backLightColor: 0xffb88c,
+    backLightColor: 0xffdca3,
     backLightIntensity: 0.5,
-    ambientLightColor: 0xfff8f0,
+    ambientLightColor: 0xffffff,
     ambientLightIntensity: 0.45,
-    hemisphereSkyColor: 0xfff5e6,
+    hemisphereSkyColor: 0xffffff,
     hemisphereGroundColor: 0xf0e6d2,
     hemisphereIntensity: 0.35,
 
-    // Particles - soft multi-color spectrum
+    // Particles - Warm & Soft spectrum
     particleCount: 180,
     particleColors: [
       [0.95, 0.6, 0.45],   // Soft coral
       [0.85, 0.55, 0.75],  // Soft pink
       [0.90, 0.75, 0.40],  // Soft golden
-      [0.50, 0.70, 0.90],  // Soft blue
+      [0.50, 0.70, 0.90],  // Soft blue (Balance)
       [0.75, 0.55, 0.85],  // Soft purple
-      [0.50, 0.85, 0.75],  // Soft mint
       [0.95, 0.65, 0.35],  // Soft orange
-      [0.60, 0.75, 0.90],  // Soft cyan
     ],
     particleOpacity: 0.7,
     particleBlending: 'normal',
@@ -166,39 +164,39 @@ export const STAGE_THEMES: Record<StageTheme, StageThemeConfig> = {
   },
 
   dark: {
-    // Background - deep space
-    backgroundColor: 0x0a0a0f,
-    fogColor: 0x0a0a0f,
+    // Background - deep space blue (more natural night)
+    backgroundColor: 0x0f172a, // Slate-900 (Deep midnight blue)
+    fogColor: 0x0f172a,
     fogNear: 15,
-    fogFar: 60,
+    fogFar: 80,
 
-    // Platform - dark metallic
-    platformColor: 0x1a1a24,
-    platformRoughness: 0.3,
-    platformMetalness: 0.7,
-    platformOpacity: 0.85,
-    rimColor: 0x4466ff,
-    rimOpacity: 0.3,
+    // Platform - dark metallic with subtle reflection
+    platformColor: 0x1e293b, // Slate-800 (Lighter dark)
+    platformRoughness: 0.4, 
+    platformMetalness: 0.8,
+    platformOpacity: 0.9,
+    rimColor: 0x38bdf8, // Sky-400 (Bright Cyan accent)
+    rimOpacity: 0.6,
 
-    // Grid - neon blue
-    gridColor1: 0x3344cc,
-    gridColor2: 0x1a1a2e,
-    gridOpacity: 0.4,
+    // Grid - subtle tech grid
+    gridColor1: 0x3b82f6, // Blue-500
+    gridColor2: 0x1e293b, // Slate-800
+    gridOpacity: 0.3,
 
-    // Lights - dramatic stage
-    mainLightColor: 0xffffff,
-    mainLightIntensity: 2.5,
-    sideLightColor: 0x6688ff,
-    sideLightIntensity: 1.8,
-    backLightColor: 0x88aaff,
-    backLightIntensity: 1.2,
-    ambientLightColor: 0x1a1a2e,
-    ambientLightIntensity: 0.4,
-    hemisphereSkyColor: 0x1a2040,
-    hemisphereGroundColor: 0x0a0a1a,
-    hemisphereIntensity: 0.4,
+    // Lights - Moonlight & Cyber atmosphere
+    mainLightColor: 0xdbeafe, // Pale blue moonlight
+    mainLightIntensity: 1.8, // Softened intensity
+    sideLightColor: 0x0ea5e9, // Cyan fill
+    sideLightIntensity: 1.2,
+    backLightColor: 0x6366f1, // Indigo rim
+    backLightIntensity: 1.0,
+    ambientLightColor: 0x334155, // Slate-700 (Brighter shadows)
+    ambientLightIntensity: 0.8, // Less pitch black shadows
+    hemisphereSkyColor: 0x334155, // Lighter sky
+    hemisphereGroundColor: 0x0f172a, // Darker ground
+    hemisphereIntensity: 0.6, // Better overall visibility
 
-    // Particles - subtle cosmic dust
+    // Particles - cosmic dust
     particleCount: 150,
     particleColors: [
       [0.3, 0.5, 0.9],

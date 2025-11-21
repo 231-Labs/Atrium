@@ -1,7 +1,7 @@
 
 import { RetroPanel } from "@/components/common/RetroPanel";
 import { RetroButton } from "@/components/common/RetroButton";
-import { ContentItemData } from "./ContentItem";
+import { ContentItemData } from "../content";
 import { SpaceInfoCard } from "./SpaceInfoCard";
 import { getWalrusBlobUrl } from "@/config/walrus";
 import { useIdentity } from "@/hooks/useIdentity";
@@ -64,15 +64,24 @@ export function LandingPageView({
                   {item.description}
                 </p>
                 <div className="mt-auto pt-3 border-t border-gray-100 flex justify-between items-center">
-                  <span className="text-xs font-bold text-gray-500">
-                    {item.price && item.price > 0 ? `${item.price} SUI` : 'FREE'}
+                  <span className="text-xs font-bold text-gray-500" style={{ fontFamily: 'Georgia, serif' }}>
+                    {item.isLocked ? (
+                      <span className="flex items-center gap-1">
+                        <span>🔒</span>
+                        <span>Subscribers Only</span>
+                      </span>
+                    ) : (
+                      'FREE'
+                    )}
                   </span>
                   <RetroButton
                     onClick={() => item.isLocked && !isSubscribed && !isCreator ? onUnlock(item.id) : onView(item.id)}
                     variant={item.isLocked && !isSubscribed && !isCreator ? "primary" : "secondary"}
                     size="sm"
+                    disabled={item.isLocked && !isSubscribed && !isCreator}
+                    className={item.isLocked && !isSubscribed && !isCreator ? 'opacity-50 cursor-not-allowed' : ''}
                   >
-                    {item.isLocked && !isSubscribed && !isCreator ? "Unlock" : "View"}
+                    {item.isLocked && !isSubscribed && !isCreator ? "Subscribe to Read" : "Read"}
                   </RetroButton>
                 </div>
               </div>
@@ -84,7 +93,7 @@ export function LandingPageView({
   };
 
   return (
-    <div className="w-full h-full overflow-y-auto bg-white">
+    <div className="w-full h-full overflow-y-auto scrollbar-hidden bg-white">
       {/* Banner Section - Full width relative to container */}
       <div className="relative w-full">
         {/* Cover Image */}
@@ -135,7 +144,7 @@ export function LandingPageView({
             <span>Subscription: {space.subscriptionPrice} SUI</span>
           </div>
 
-          {isCreator && onUpload && (
+          {onUpload && (
             <div className="mt-6">
               <RetroButton
                 onClick={onUpload}

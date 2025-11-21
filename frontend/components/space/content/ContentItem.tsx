@@ -10,6 +10,8 @@ export interface ContentItemData {
   type: "merch" | "video" | "essay";
   thumbnail?: string;
   isLocked?: boolean;
+  blobId?: string; // Walrus blob ID for content
+  sealResourceId?: string; // Seal Protocol resourceId for decryption (only for encrypted content)
 }
 
 interface ContentItemProps {

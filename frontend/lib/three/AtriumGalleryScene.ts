@@ -43,6 +43,7 @@ export class AtriumGalleryScene {
   private effectsManager?: SpecialEffectsManager; // Effects manager
   private waterManager?: WaterEffectsManager; // Water effects manager
   private fishSchool: THREE.Mesh[] = []; // Swimming fish based on volume
+  private guardianStones: THREE.Group[] = []; // Floating polygonal guardian stones
   private energyBeams: THREE.Mesh[] = []; // Energy beams based on momentum
   private smokeParticles?: THREE.Points; // Smoke particles for "smoking" island state
   private fireParticles?: THREE.Points; // Fire particles for "burning" island state
@@ -54,8 +55,8 @@ export class AtriumGalleryScene {
     this.theme = config.theme || {
       backgroundColor: 0xe8f4f8,
       fogColor: 0xe8f4f8,
-      fogNear: 25,
-      fogFar: 70,
+      fogNear: 50, // Increased from 25 for less fog
+      fogFar: 120, // Increased from 70 for better visibility
     } as StageThemeConfig;
     
     this.initializeBackground();
@@ -67,6 +68,7 @@ export class AtriumGalleryScene {
     // this.createCentralLightBeam(); // Disabled - may interfere with screen placement
     this.createHolographicScreen(); // Create main holographic video screen
     this.createFloatingOrbs(); // Add decorative light orbs
+    this.createGuardianStones(); // Add cyber polygonal guardian stones
     this.initializeAudienceSeatPositions(); // Initialize positions without creating visual seats
     this.createStageSpotlights(config.enableSpotlights);
     this.createAmbientParticles(config.enableAmbientParticles);
@@ -85,204 +87,502 @@ export class AtriumGalleryScene {
   }
 
   private initializeBackground() {
-    this.scene.background = new THREE.Color(this.theme.backgroundColor);
+    // Create gradient sky
+    const baseColor = new THREE.Color(this.theme.backgroundColor);
+    const topColor = baseColor.clone().offsetHSL(0, 0, -0.1); // Slightly darker at top
+    const bottomColor = baseColor.clone().offsetHSL(0, 0, 0.1); // Lighter at horizon
+    
+    this.scene.background = this.createGradientTexture(topColor, bottomColor);
+    
     const fog = new THREE.Fog(this.theme.fogColor, this.theme.fogNear, this.theme.fogFar);
     this.scene.fog = fog;
+  }
+
+  private createGradientTexture(colorTop: THREE.Color, colorBottom: THREE.Color): THREE.Texture {
+    const canvas = document.createElement('canvas');
+    canvas.width = 2;
+    canvas.height = 512;
+    
+    const context = canvas.getContext('2d');
+    if (context) {
+      const gradient = context.createLinearGradient(0, 0, 0, 512);
+      gradient.addColorStop(0, '#' + colorTop.getHexString());
+      gradient.addColorStop(1, '#' + colorBottom.getHexString());
+      
+      context.fillStyle = gradient;
+      context.fillRect(0, 0, 2, 512);
+    }
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
   }
 
   private createPlatform(enabled = true) {
     if (!enabled) return;
 
-    // Create parametric terrain platform with height variation
-    const createParametricTerrain = () => {
-      const radius = 8;
-      const segments = 64;
-      const geometry = new THREE.BufferGeometry();
-      
-      const vertices: number[] = [];
-      const indices: number[] = [];
-      const normals: number[] = [];
-      
-      // Center point
-      vertices.push(0, 0, 0);
-      normals.push(0, 1, 0);
-      
-      // Generate vertices in concentric circles with parametric height
-      const rings = 16;
-      for (let ring = 1; ring <= rings; ring++) {
-        const ringRadius = (ring / rings) * radius;
-        const ringSegments = Math.floor(segments * (ring / rings)) + 8;
-        
-        for (let i = 0; i < ringSegments; i++) {
-          const angle = (i / ringSegments) * Math.PI * 2;
-          const x = Math.cos(angle) * ringRadius;
-          const z = Math.sin(angle) * ringRadius;
-          
-          // Parametric height variation - waves and ripples
-          const wave1 = Math.sin(ringRadius * 0.5) * 0.08;
-          const wave2 = Math.sin(angle * 3) * Math.cos(ringRadius * 0.8) * 0.05;
-          const ripple = Math.cos(ringRadius * 1.2 + angle * 2) * 0.03;
-          const y = wave1 + wave2 + ripple;
-          
-          vertices.push(x, y, z);
-          normals.push(0, 1, 0);
-        }
-      }
-      
-      // Generate indices for triangles
-      let vertexIndex = 1;
-      
-      // Connect center to first ring
-      const firstRingSegments = Math.floor(segments * (1 / rings)) + 8;
-      const maxFirstRingVertex = vertexIndex + firstRingSegments - 1;
-      for (let i = 0; i < firstRingSegments; i++) {
-        const current = vertexIndex + i;
-        const next = vertexIndex + ((i + 1) % firstRingSegments);
-        // Validate indices are within bounds
-        if (current <= maxFirstRingVertex && next <= maxFirstRingVertex) {
-          indices.push(0, current, next);
-        }
-      }
-      vertexIndex += firstRingSegments;
-      
-      // Connect rings
-      for (let ring = 1; ring < rings; ring++) {
-        const currentRingSegments = Math.floor(segments * (ring / rings)) + 8;
-        const nextRingSegments = Math.floor(segments * ((ring + 1) / rings)) + 8;
-        
-        for (let i = 0; i < Math.max(currentRingSegments, nextRingSegments); i++) {
-          const curr = vertexIndex + (i % currentRingSegments);
-          const next = vertexIndex + ((i + 1) % currentRingSegments);
-          const currNext = vertexIndex + currentRingSegments + (i % nextRingSegments);
-          const nextNext = vertexIndex + currentRingSegments + ((i + 1) % nextRingSegments);
-          
-          indices.push(curr, currNext, next);
-          indices.push(next, currNext, nextNext);
-        }
-        
-        vertexIndex += currentRingSegments;
-      }
-      
-      geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-      geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-      geometry.setIndex(indices);
-      geometry.computeVertexNormals();
-      
-      return geometry;
+    const isNightMode = this.theme.backgroundColor === 0x0f172a; // Check if night mode (Slate-900)
+
+    // Create clean geometric platform - Monument Valley style
+    const createGeometricPlatform = () => {
+      const group = new THREE.Group();
+
+      // 1. Main Platform Surface (Top)
+      // Octagonal prism for a more architectural look than a simple cylinder
+      const topGeometry = new THREE.CylinderGeometry(8, 8, 0.6, 8);
+      const topMaterial = new THREE.MeshStandardMaterial({
+        color: isNightMode ? 0x475569 : this.theme.platformColor, // Night: Slate-600 (Brighter grey)
+        roughness: isNightMode ? 0.4 : 0.1, // Night: More matte to catch light
+        metalness: isNightMode ? 0.5 : 0.1, // Night: Reduced metalness to avoid darkness
+        flatShading: true, // Low-poly look
+        emissive: isNightMode ? 0x1e293b : 0xffffff, // Night: Subtle slate glow
+        emissiveIntensity: isNightMode ? 0.25 : 0.15,
+      });
+      const topPlatform = new THREE.Mesh(topGeometry, topMaterial);
+      topPlatform.receiveShadow = true;
+      topPlatform.castShadow = true;
+      group.add(topPlatform);
+
+      // 2. Secondary Tier (Middle)
+      // Slightly smaller, contrasting or same color
+      const midGeometry = new THREE.CylinderGeometry(6.5, 7, 1.2, 8);
+      const midMaterial = new THREE.MeshStandardMaterial({
+        color: isNightMode ? 0x334155 : this.theme.platformColor, // Night: Slate-700 (Medium grey)
+        roughness: isNightMode ? 0.5 : 0.4,
+        metalness: isNightMode ? 0.6 : 0.1,
+        flatShading: true,
+        emissive: isNightMode ? 0x0f172a : this.theme.platformColor,
+        emissiveIntensity: isNightMode ? 0.2 : 0.12,
+      });
+      const midPlatform = new THREE.Mesh(midGeometry, midMaterial);
+      midPlatform.position.y = -0.9;
+      midPlatform.receiveShadow = true;
+      midPlatform.castShadow = true;
+      group.add(midPlatform);
+
+      // 3. Architectural Support (Bottom)
+      // Inverted stepped pyramid feel
+      const bottomGeometry = new THREE.CylinderGeometry(4, 6, 2.5, 8);
+      const bottomMaterial = new THREE.MeshStandardMaterial({
+        color: isNightMode ? 0x1e293b : this.theme.platformColor, // Night: Slate-800 (Darker base)
+        roughness: isNightMode ? 0.6 : 0.5,
+        metalness: isNightMode ? 0.7 : 0.2,
+        flatShading: true,
+        emissive: isNightMode ? 0x020617 : this.theme.platformColor,
+        emissiveIntensity: isNightMode ? 0.15 : 0.1,
+      });
+      const bottomPlatform = new THREE.Mesh(bottomGeometry, bottomMaterial);
+      bottomPlatform.position.y = -2.75;
+      bottomPlatform.receiveShadow = true;
+      bottomPlatform.castShadow = true;
+      group.add(bottomPlatform);
+
+      // 4. Decorative Accent Ring (Golden/Glowing)
+      // Increased radius to 9.0 to be clearly outside platform
+      const ringGeometry = new THREE.TorusGeometry(9.0, 0.08, 6, 8); 
+      const ringMaterial = new THREE.MeshBasicMaterial({
+        color: this.theme.rimColor,
+        transparent: true,
+        opacity: this.theme.rimOpacity,
+      });
+      const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+      ring.rotation.x = Math.PI / 2;
+      ring.rotation.z = Math.PI / 8; // Align with octagon
+      ring.position.y = 0.3;
+      // Softer breathing: reduced speed and range
+      ring.userData = { isBreathing: true, baseOpacity: this.theme.rimOpacity, breathingSpeed: 0.8, breathingRange: 0.15 };
+      group.add(ring);
+      this.animatedElements.push(ring);
+
+      return group;
     };
 
-    const platformGeometry = createParametricTerrain();
-    
-    // Smooth reflective material
-    const platformMaterial = new THREE.MeshStandardMaterial({
-      color: this.theme.platformColor,
-      roughness: this.theme.platformRoughness,
-      metalness: this.theme.platformMetalness,
-      transparent: true,
-      opacity: this.theme.platformOpacity,
-      side: THREE.DoubleSide,
-      envMapIntensity: 1.2,
-    });
+    const platformGroup = createGeometricPlatform();
+    this.scene.add(platformGroup);
 
-    const platform = new THREE.Mesh(platformGeometry, platformMaterial);
-    platform.receiveShadow = true;
-    platform.castShadow = true;
-    this.scene.add(platform);
+    // Create floating island base - detailed underside
+    // Default to geometric, but will be updated by subscriber count later
+    this.updateFloatingIslandBaseStyle(0); // Start with low count style
+  }
 
-    // Add extruded edge for thickness
-    const edgePoints = [];
-    const edgeSegments = 64;
-    for (let i = 0; i <= edgeSegments; i++) {
-      const angle = (i / edgeSegments) * Math.PI * 2;
-      edgePoints.push(new THREE.Vector2(Math.cos(angle) * 8, Math.sin(angle) * 8));
+  // Base style configuration thresholds
+  private readonly BASE_STYLE_THRESHOLDS = {
+    GEOMETRIC: 0,      // Start with geometric (Monument Valley)
+    LAPUTA: 100,       // Switch to Laputa style at 100 subscribers
+  };
+
+  private currentBaseObject?: THREE.Object3D;
+
+  /**
+   * Update the floating island base style based on subscriber count
+   */
+  public updateFloatingIslandBaseStyle(subscriberCount: number) {
+    // Determine style
+    const useLaputaStyle = subscriberCount >= this.BASE_STYLE_THRESHOLDS.LAPUTA;
+    const styleKey = useLaputaStyle ? 'LAPUTA' : 'GEOMETRIC';
+
+    console.log(`🏝️ Updating island base style: ${styleKey} (Subscribers: ${subscriberCount})`);
+
+    // Remove existing base
+    if (this.currentBaseObject) {
+      this.scene.remove(this.currentBaseObject);
+      
+      // Cleanup animated elements from old base
+      this.currentBaseObject.traverse(child => {
+        const idx = this.animatedElements.indexOf(child);
+        if (idx > -1) {
+          this.animatedElements.splice(idx, 1);
+        }
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+          if (Array.isArray(child.material)) {
+            child.material.forEach(m => m.dispose());
+          } else {
+            child.material.dispose();
+          }
+        }
+      });
+      this.currentBaseObject = undefined;
     }
+
+    // Create new base
+    const newBase = new THREE.Group();
     
-    const edgeShape = new THREE.Shape(edgePoints);
-    const extrudeSettings = {
-      steps: 1,
-      depth: 0.3,
-      bevelEnabled: false,
-    };
+    if (useLaputaStyle) {
+      this.createLaputaBase(newBase);
+    } else {
+      this.createGeometricBase(newBase);
+    }
+
+    this.currentBaseObject = newBase;
+    this.scene.add(newBase);
+  }
+
+  private createGeometricBase(parentGroup: THREE.Group) {
+    // Geometric/Architectural base (Monument Valley style)
     
-    const edgeGeometry = new THREE.ExtrudeGeometry(edgeShape, extrudeSettings);
-    const edgeMaterial = new THREE.MeshStandardMaterial({
+    const baseMaterial = new THREE.MeshStandardMaterial({
       color: this.theme.platformColor,
-      roughness: this.theme.platformRoughness + 0.1,
-      metalness: this.theme.platformMetalness,
-      transparent: true,
-      opacity: this.theme.platformOpacity * 0.8,
+      roughness: 0.7,
+      metalness: 0.1,
+      flatShading: true,
+      emissive: this.theme.platformColor,
+      emissiveIntensity: 0.1,
     });
+
+    // Main inverted pyramid (large)
+    const mainConeGeometry = new THREE.CylinderGeometry(0.5, 5, 8, 6);
+    const mainCone = new THREE.Mesh(mainConeGeometry, baseMaterial);
+    mainCone.position.y = -6.5; 
+    mainCone.receiveShadow = true;
+    parentGroup.add(mainCone);
+
+    // Secondary floating geometric elements (crystals/satellite prisms)
+    const satelliteCount = 5;
+    for(let i=0; i<satelliteCount; i++) {
+      const angle = (i / satelliteCount) * Math.PI * 2;
+      const radius = 4 + Math.random() * 2;
+      const y = -4 - Math.random() * 3;
+      
+      // Triangular Prism
+      const prismGeo = new THREE.CylinderGeometry(0.4, 0, 1.5, 3);
+      const prism = new THREE.Mesh(prismGeo, baseMaterial);
+      prism.position.set(Math.cos(angle)*radius, y, Math.sin(angle)*radius);
+      prism.rotation.x = Math.random() * 0.5;
+      prism.rotation.z = Math.random() * 0.5;
+      prism.rotation.y = angle;
+      
+      parentGroup.add(prism);
+      this.animatedElements.push(prism); // Rotate them slowly
+    }
+
+    // Add a large glowing crystal at the very bottom tip
+    const crystalGeo = new THREE.OctahedronGeometry(1.2, 0);
+    const crystalMat = new THREE.MeshStandardMaterial({
+      color: this.theme.rimColor,
+      emissive: this.theme.rimColor,
+      emissiveIntensity: 0.5,
+      roughness: 0.1,
+      metalness: 0.8,
+      transparent: true,
+      opacity: 0.9
+    });
+    const crystal = new THREE.Mesh(crystalGeo, crystalMat);
+    crystal.position.y = -11;
+    parentGroup.add(crystal);
+    this.animatedElements.push(crystal);
     
-    const edge = new THREE.Mesh(edgeGeometry, edgeMaterial);
-    edge.rotation.x = Math.PI / 2;
-    edge.position.y = -0.3;
-    edge.receiveShadow = true;
-    edge.castShadow = true;
-    this.scene.add(edge);
-
-    // Create floating island base - inspired by Laputa/Babylon Gardens
-    this.createFloatingIslandBase();
-
-    // Animated rim with theme colors
-    const rimGeometry = new THREE.RingGeometry(7.9, 8.15, 64);
-    const rimMaterial = new THREE.MeshBasicMaterial({
+    // Add subtle energy rings around the crystal
+    const ringGeo = new THREE.TorusGeometry(2, 0.05, 4, 32);
+    const ringMat = new THREE.MeshBasicMaterial({
       color: this.theme.rimColor,
       transparent: true,
-      opacity: this.theme.rimOpacity,
-      side: THREE.DoubleSide,
+      opacity: 0.3
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.position.y = -11;
+    ring.rotation.x = Math.PI/2;
+    ring.userData = { isBreathing: true, baseOpacity: 0.3, breathingSpeed: 2.0, breathingRange: 0.2 };
+    parentGroup.add(ring);
+    this.animatedElements.push(ring);
+
+    // --- Cyber Accents ---
+    const cyberColor = 0x00ffff; // Cyan
+    const cyberColor2 = 0xff00ff; // Magenta
+
+    // 1. Glowing circuit lines on the main cone
+    const coneEdges = new THREE.EdgesGeometry(mainConeGeometry);
+    const coneLineMat = new THREE.LineBasicMaterial({ color: cyberColor, transparent: true, opacity: 0.4 });
+    const coneLines = new THREE.LineSegments(coneEdges, coneLineMat);
+    coneLines.position.copy(mainCone.position);
+    parentGroup.add(coneLines);
+
+    // 2. Vertical Laser/Data Streams
+    const streamCount = 4;
+    for(let i=0; i<streamCount; i++) {
+       const height = 15;
+       const geo = new THREE.CylinderGeometry(0.05, 0.05, height, 8);
+       const mat = new THREE.MeshBasicMaterial({
+           color: cyberColor,
+           transparent: true,
+           opacity: 0.3,
+           blending: THREE.AdditiveBlending
+       });
+       const beam = new THREE.Mesh(geo, mat);
+       const angle = (i / streamCount) * Math.PI * 2;
+       const r = 6;
+       beam.position.set(Math.cos(angle)*r, -4, Math.sin(angle)*r);
+       parentGroup.add(beam);
+       this.animatedElements.push(beam);
+       
+       // Add pulse effect to beam (via update loop if possible, or simple visual here)
+    }
+
+    // 3. Floating Cyber Rings (Multiple flat rings around the bottom base)
+    const ringCount = 4;
+    for(let i=0; i<ringCount; i++) {
+      // Rings getting wider as they go down
+      const radius =  3 + (i * 1.5); 
+      const yPos = -6 - (i * 1.1); // -8, -9.5, -11
+      
+      const cyberRingGeo = new THREE.TorusGeometry(radius, 0.05, 16, 100);
+      // Rotate geometry to lie flat on XZ plane (ensure horizontal)
+      cyberRingGeo.rotateX(Math.PI / 2);
+      
+      const cyberRingMat = new THREE.MeshBasicMaterial({ 
+        color: cyberColor2, 
+        transparent: true, 
+        opacity: 0.4
+      });
+      
+      const cyberRing = new THREE.Mesh(cyberRingGeo, cyberRingMat);
+      cyberRing.position.y = yPos;
+      
+      // Animation params
+      cyberRing.userData = { 
+        isBreathing: true, 
+        baseOpacity: 0.3, 
+        breathingSpeed: 0.5 + (i * 0.1), // Slower breathing
+        breathingRange: 0.1, // Reduced breathing range
+        rotationSpeed: 0.02 * (i % 2 === 0 ? 1 : -1) // Very slow rotation, no wobble
+      };
+      
+      parentGroup.add(cyberRing);
+      this.animatedElements.push(cyberRing);
+      this.parametricElements.push(cyberRing); // Use parametric loop for rotation
+    }
+  }
+
+  private createGuardianStones() {
+    // Create floating polygonal guardian stones - adapted to match scene style
+    const stoneCount = 5;
+    const orbitRadius = 28; // Increased from 18
+    
+    for(let i=0; i<stoneCount; i++) {
+      const group = new THREE.Group();
+      
+      // 1. Core Stone (Match platform style - Geometric/Ethereal)
+      // Using theme colors instead of dark metal for better integration
+      const geometry = new THREE.IcosahedronGeometry(1.2, 0);
+      const material = new THREE.MeshStandardMaterial({
+        color: this.theme.platformColor, // Match platform base
+        roughness: 0.3,
+        metalness: 0.2,
+        flatShading: true,
+        transparent: true,
+        opacity: 0.95
+      });
+      const stone = new THREE.Mesh(geometry, material);
+      group.add(stone);
+      
+      // 2. Wireframe Cage (Subtle, matching rim color)
+      const wireGeo = new THREE.WireframeGeometry(geometry);
+      const wireMat = new THREE.LineBasicMaterial({
+        color: this.theme.rimColor, // Match theme rim color (Gold/Blue/Orange)
+        transparent: true,
+        opacity: 0.25, // Much more subtle
+        linewidth: 1
+      });
+      const wireframe = new THREE.LineSegments(wireGeo, wireMat);
+      wireframe.scale.set(1.02, 1.02, 1.02); // Closer fit
+      group.add(wireframe);
+      
+      // 3. Inner Core Glow (Soft light)
+      const coreGeo = new THREE.IcosahedronGeometry(0.5, 0);
+      const coreMat = new THREE.MeshBasicMaterial({
+        color: this.theme.rimColor, // Match theme
+        transparent: true,
+        opacity: 0.8
+      });
+      const core = new THREE.Mesh(coreGeo, coreMat);
+      group.add(core);
+      
+      // Position
+      const angle = (i / stoneCount) * Math.PI * 2;
+      group.position.set(
+        Math.cos(angle) * orbitRadius,
+        Math.sin(angle * 3) * 2, // Wavy height
+        Math.sin(angle) * orbitRadius
+      );
+      
+      // Animation Data
+      group.userData = {
+        angle: angle,
+        radius: orbitRadius,
+        speed: 0.05 + Math.random() * 0.05, // Slower, more majestic
+        bobSpeed: 0.5 + Math.random() * 0.5,
+        bobHeight: 2,
+        rotationSpeed: Math.random() * 0.2
+      };
+      
+      this.scene.add(group);
+      this.guardianStones.push(group);
+    }
+  }
+
+  private createLaputaBase(parentGroup: THREE.Group) {
+    // Laputa-inspired floating island base (Castle in the Sky style)
+    const isNightMode = this.theme.backgroundColor === 0x0f172a || this.theme.backgroundColor === 0x0a0a0f;
+
+    const baseMaterial = new THREE.MeshStandardMaterial({
+      color: isNightMode ? 0x1e293b : 0x6a7b76, // Night: Slate / Day: Mossy Stone
+      roughness: isNightMode ? 0.4 : 0.9, // Night: Metallic / Day: Rough
+      metalness: isNightMode ? 0.7 : 0.1,
+      flatShading: false,
+      emissive: isNightMode ? 0x0f172a : 0x6a7b76, // Night: Deep blue glow
+      emissiveIntensity: 0.1,
     });
 
-    const rim = new THREE.Mesh(rimGeometry, rimMaterial);
-    rim.rotation.x = -Math.PI / 2;
-    rim.position.y = 0.15;
-    this.scene.add(rim);
-    this.animatedElements.push(rim);
+    const accentMaterial = new THREE.MeshStandardMaterial({
+      color: isNightMode ? 0x334155 : 0x4a5568, // Night: Lighter Slate / Day: Dark Metal
+      roughness: 0.7,
+      metalness: 0.4,
+      emissive: isNightMode ? 0x1e293b : 0x4a5568,
+      emissiveIntensity: 0.1,
+    });
 
-    // Add concentric rings for parametric feel at different heights
-    for (let i = 1; i <= 3; i++) {
-      const radius = 8 + i * 0.8;
-      const height = 0.1 + i * 0.08;
-      const ringGeo = new THREE.RingGeometry(radius - 0.05, radius + 0.05, 64);
-      const ringMat = new THREE.MeshBasicMaterial({
-        color: this.theme.rimColor,
-        transparent: true,
-        opacity: this.theme.rimOpacity * (0.4 / i),
-        side: THREE.DoubleSide,
+    // 1. Main Hemispherical Body (The massive floating earth/stone chunk)
+    const domeGeometry = new THREE.SphereGeometry(7.8, 32, 24, 0, Math.PI * 2, 0, Math.PI * 0.5); 
+    const dome = new THREE.Mesh(domeGeometry, baseMaterial);
+    dome.rotation.x = Math.PI; // Point down
+    dome.position.y = 0; 
+    dome.scale.set(1, 0.8, 1); // Slightly flattened
+    dome.castShadow = true;
+    dome.receiveShadow = true;
+    parentGroup.add(dome);
+
+    // 2. Concentric Stone Rings/Tiers (The architectural layers)
+    const rings = [
+      { radius: 6, width: 0.8, y: -2 },
+      { radius: 4.5, width: 0.6, y: -4 },
+      { radius: 3, width: 0.5, y: -5.5 },
+    ];
+
+    rings.forEach(ring => {
+      const geometry = new THREE.CylinderGeometry(ring.radius, ring.radius * 0.95, ring.width, 32);
+      const mesh = new THREE.Mesh(geometry, accentMaterial);
+      mesh.position.y = ring.y;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      parentGroup.add(mesh);
+      
+      // Add some technological/ancient markings (torus rings)
+      const detailGeo = new THREE.TorusGeometry(ring.radius + 0.1, 0.05, 4, 32);
+      const detailMat = new THREE.MeshBasicMaterial({ 
+        color: this.theme.rimColor, 
+        transparent: true, 
+        opacity: 0.3 
       });
-      const ring = new THREE.Mesh(ringGeo, ringMat);
-      ring.rotation.x = -Math.PI / 2;
-      ring.position.y = height;
-      this.scene.add(ring);
-      this.animatedElements.push(ring);
+      const detail = new THREE.Mesh(detailGeo, detailMat);
+      detail.rotation.x = Math.PI / 2;
+      detail.position.y = ring.y;
+      parentGroup.add(detail);
+      this.animatedElements.push(detail);
+    });
+
+    // 3. The Central Core / Volucite Crystal (The power source)
+    const coreGeometry = new THREE.IcosahedronGeometry(1.5, 0);
+    const coreMaterial = new THREE.MeshStandardMaterial({
+      color: 0x44aadd, // Cyan/Blue crystal
+      emissive: 0x2288cc,
+      emissiveIntensity: 1.5,
+      roughness: 0.1,
+      metalness: 0.9,
+      transparent: true,
+      opacity: 0.9,
+    });
+    const core = new THREE.Mesh(coreGeometry, coreMaterial);
+    core.position.y = -7.5; // At the bottom center
+    parentGroup.add(core);
+    this.animatedElements.push(core); 
+
+    // 4. Surrounding "Root" Structures or Broken Pillars
+    const debrisCount = 12;
+    const debrisGeo = new THREE.ConeGeometry(0.2, 3, 5);
+    
+    for(let i=0; i<debrisCount; i++) {
+      const angle = (i / debrisCount) * Math.PI * 2;
+      const radius = 2 + Math.random() * 3;
+      const length = 2 + Math.random() * 4;
+      
+      const mesh = new THREE.Mesh(debrisGeo, baseMaterial);
+      mesh.position.set(
+        Math.cos(angle) * radius,
+        -5 - Math.random() * 2,
+        Math.sin(angle) * radius
+      );
+      mesh.rotation.x = Math.PI; // Point down
+      mesh.rotation.z = (Math.random() - 0.5) * 0.5; // Slight tilt
+      mesh.rotation.y = angle;
+      mesh.scale.y = length / 3;
+      
+      parentGroup.add(mesh);
     }
 
-    // Add vertical parametric accent lines from platform edge
-    for (let i = 0; i < 12; i++) {
-      const angle = (i / 12) * Math.PI * 2;
-      const x = Math.cos(angle) * 8;
-      const z = Math.sin(angle) * 8;
-      
-      const lineGeometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(x, 0, z),
-        new THREE.Vector3(x, 0.5, z),
-      ]);
-      
-      const lineMaterial = new THREE.LineBasicMaterial({
-        color: this.theme.rimColor,
-        transparent: true,
-        opacity: this.theme.rimOpacity * 0.6,
-      });
-      
-      const line = new THREE.Line(lineGeometry, lineMaterial);
-      this.scene.add(line);
-      this.animatedElements.push(line);
-    }
+    // 5. Energy Field (Sphere enclosing the crystal)
+    const fieldGeo = new THREE.SphereGeometry(2.5, 24, 24);
+    const fieldMat = new THREE.MeshBasicMaterial({
+      color: 0x44aadd,
+      transparent: true,
+      opacity: 0.1,
+      wireframe: true,
+    });
+    const field = new THREE.Mesh(fieldGeo, fieldMat);
+    field.position.y = -7.5;
+    parentGroup.add(field);
+    this.animatedElements.push(field);
+  }
+
+  private createFloatingIslandBase_DEPRECATED() {
+    // Deprecated - logic moved to createGeometricBase / createLaputaBase
+    // Kept empty to satisfy interface if needed, or remove
   }
 
   private createWaterSurface() {
     // Create organic lake shape with curved edges
-    const isNightMode = this.theme.backgroundColor === 0x0a0a0f;
-    const waterColor = isNightMode ? 0x2a4a6a : 0x6ab8d0;
+    const isNightMode = this.theme.backgroundColor === 0x0f172a || this.theme.backgroundColor === 0x0a0a0f;
+    // More vibrant blue colors
+    const waterColor = isNightMode ? 0x0ea5e9 : 0x6688aa; // Night: Cyan/Blue glow, Day: Steel Blue
     
     // Create organic shape using bezier curves
     const lakeShape = new THREE.Shape();
@@ -316,14 +616,16 @@ export class AtriumGalleryScene {
     // Create geometry from shape with segments for wave animation
     const waterGeometry = new THREE.ShapeGeometry(lakeShape, 30);
     
-    const waterMaterial = new THREE.MeshStandardMaterial({
+    const waterMaterial = new THREE.MeshPhongMaterial({
       color: waterColor,
       transparent: true,
-      opacity: 0.5,
-      roughness: 0.15,
-      metalness: 0.6,
-      envMapIntensity: 1.2,
+      opacity: 0.85,
+      emissive: waterColor,
+      emissiveIntensity: 0.2, // Lower emission for lighter feel
+      specular: 0x1166aa, // Blue specular highlights
+      shininess: 100,
       side: THREE.DoubleSide,
+      reflectivity: 0.5,
     });
     
     const water = new THREE.Mesh(waterGeometry, waterMaterial);
@@ -360,209 +662,6 @@ export class AtriumGalleryScene {
     foam.position.y = -9.9;
     foam.renderOrder = 3;
     this.scene.add(foam);
-  }
-
-  private createFloatingIslandBase() {
-    // Create varied floating island with multiple geometry types
-    
-    const baseMaterial = new THREE.MeshStandardMaterial({
-      color: this.theme.platformColor,
-      roughness: this.theme.platformRoughness + 0.25,
-      metalness: this.theme.platformMetalness * 0.4,
-      transparent: true,
-      opacity: this.theme.platformOpacity * 0.6,
-      depthWrite: true,
-    });
-
-    // Helper: Create cone stalactite
-    const createCone = (baseRadius: number, height: number, x: number, z: number, y: number) => {
-      const geometry = new THREE.ConeGeometry(baseRadius, height, 8);
-      const positionAttr = geometry.getAttribute('position');
-      for (let i = 0; i < positionAttr.count; i++) {
-        const vertY = positionAttr.getY(i);
-        if (vertY < 0) {
-          const noise = (Math.random() - 0.5) * 0.3;
-          positionAttr.setX(i, positionAttr.getX(i) + noise);
-          positionAttr.setZ(i, positionAttr.getZ(i) + noise);
-        }
-      }
-      geometry.computeVertexNormals();
-      const mesh = new THREE.Mesh(geometry, baseMaterial);
-      mesh.position.set(x, y - height / 2, z);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      return mesh;
-    };
-
-    // Helper: Create irregular rock chunk
-    const createRock = (size: number, x: number, z: number, y: number) => {
-      const geometry = new THREE.DodecahedronGeometry(size, 0);
-      const positionAttr = geometry.getAttribute('position');
-      for (let i = 0; i < positionAttr.count; i++) {
-        const noise = (Math.random() - 0.5) * 0.4;
-        positionAttr.setX(i, positionAttr.getX(i) * (1 + noise));
-        positionAttr.setY(i, positionAttr.getY(i) * (1 + noise));
-        positionAttr.setZ(i, positionAttr.getZ(i) * (1 + noise));
-      }
-      geometry.computeVertexNormals();
-      const mesh = new THREE.Mesh(geometry, baseMaterial);
-      mesh.position.set(x, y, z);
-      mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      return mesh;
-    };
-
-    // Helper: Create box cluster
-    const createBoxCluster = (x: number, z: number, y: number) => {
-      const sizes = [0.4, 0.3, 0.35];
-      const group = new THREE.Group();
-      sizes.forEach((size, idx) => {
-        const geometry = new THREE.BoxGeometry(size, size * 1.5, size);
-        const mesh = new THREE.Mesh(geometry, baseMaterial);
-        mesh.position.set(
-          (Math.random() - 0.5) * 0.5,
-          idx * 0.3,
-          (Math.random() - 0.5) * 0.5
-        );
-        mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        group.add(mesh);
-      });
-      group.position.set(x, y, z);
-      return group;
-    };
-
-    // Helper: Create prism
-    const createPrism = (size: number, x: number, z: number, y: number) => {
-      const geometry = new THREE.CylinderGeometry(size, size, size * 2, 6);
-      const mesh = new THREE.Mesh(geometry, baseMaterial);
-      mesh.position.set(x, y, z);
-      mesh.rotation.set(Math.random() * Math.PI / 4, Math.random() * Math.PI, Math.random() * Math.PI / 4);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      return mesh;
-    };
-
-    // Main central cone
-    const mainCone = createCone(5.5, 7, 0, 0, -1.0);
-    this.scene.add(mainCone);
-
-    // Medium sized mixed geometry (reduced from 8 to 5)
-    const mediumShapes = [
-      { type: 'cone', angle: 0 },
-      { type: 'rock', angle: Math.PI * 0.4 },
-      { type: 'cone', angle: Math.PI * 0.8 },
-      { type: 'prism', angle: Math.PI * 1.2 },
-      { type: 'cone', angle: Math.PI * 1.6 },
-    ];
-
-    mediumShapes.forEach(shape => {
-      const radius = 3.5 + Math.random() * 1;
-      const x = Math.cos(shape.angle) * radius;
-      const z = Math.sin(shape.angle) * radius;
-      
-      let mesh;
-      if (shape.type === 'cone') {
-        mesh = createCone(0.8 + Math.random() * 0.8, 3 + Math.random() * 2, x, z, -1.5);
-      } else if (shape.type === 'rock') {
-        mesh = createRock(0.8 + Math.random() * 0.4, x, z, -2.5 - Math.random() * 0.5);
-      } else {
-        mesh = createPrism(0.4 + Math.random() * 0.3, x, z, -2.0 - Math.random() * 0.5);
-      }
-      this.scene.add(mesh);
-    });
-
-    // Small scattered mixed geometry (reduced from 16 to 8)
-    for (let i = 0; i < 8; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const radius = 3 + Math.random() * 3.5;
-      const x = Math.cos(angle) * radius;
-      const z = Math.sin(angle) * radius;
-      
-      const shapeType = Math.floor(Math.random() * 4);
-      let mesh;
-      
-      switch(shapeType) {
-        case 0: // Small cone
-          mesh = createCone(0.3 + Math.random() * 0.4, 1.2 + Math.random() * 1.2, x, z, -2.0 - Math.random() * 0.5);
-          break;
-        case 1: // Small rock
-          mesh = createRock(0.4 + Math.random() * 0.3, x, z, -2.5 - Math.random() * 0.8);
-          break;
-        case 2: // Box cluster
-          mesh = createBoxCluster(x, z, -2.5 - Math.random() * 0.8);
-          break;
-        default: // Small prism
-          mesh = createPrism(0.25 + Math.random() * 0.2, x, z, -2.3 - Math.random() * 0.7);
-      }
-      
-      this.scene.add(mesh);
-    }
-
-    // Crystals (reduced from 14 to 10)
-    for (let i = 0; i < 10; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const radius = 3 + Math.random() * 3.5;
-      const x = Math.cos(angle) * radius;
-      const z = Math.sin(angle) * radius;
-      
-      const crystalType = Math.floor(Math.random() * 3);
-      let crystalGeometry;
-      
-      switch(crystalType) {
-        case 0:
-          crystalGeometry = new THREE.TetrahedronGeometry(0.15 + Math.random() * 0.2, 0);
-          break;
-        case 1:
-          crystalGeometry = new THREE.OctahedronGeometry(0.12 + Math.random() * 0.18, 0);
-          break;
-        default:
-          crystalGeometry = new THREE.ConeGeometry(0.08 + Math.random() * 0.12, 0.3 + Math.random() * 0.35, 6);
-      }
-      
-      const crystalMaterial = new THREE.MeshStandardMaterial({
-        color: this.theme.rimColor,
-        roughness: 0.08,
-        metalness: 0.92,
-        transparent: true,
-        opacity: 0.8,
-        emissive: this.theme.rimColor,
-        emissiveIntensity: 0.4,
-        depthWrite: false,
-      });
-      
-      const crystal = new THREE.Mesh(crystalGeometry, crystalMaterial);
-      crystal.position.set(x, -2.8 - Math.random() * 1.8, z);
-      crystal.rotation.set(
-        Math.random() * Math.PI,
-        Math.random() * Math.PI,
-        Math.random() * Math.PI
-      );
-      crystal.renderOrder = 1;
-      this.scene.add(crystal);
-      this.animatedElements.push(crystal);
-    }
-
-    // Glow rings
-    for (let i = 0; i < 3; i++) {
-      const ringRadius = 7 + i * 1.5;
-      const ringGeometry = new THREE.TorusGeometry(ringRadius, 0.05, 8, 32);
-      const ringMaterial = new THREE.MeshBasicMaterial({
-        color: this.theme.rimColor,
-        transparent: true,
-        opacity: 0.15 - i * 0.04,
-        depthWrite: false,
-      });
-      
-      const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-      ring.position.y = -2.5 - i * 1.0;
-      ring.rotation.x = Math.PI / 2;
-      ring.renderOrder = 2;
-      this.scene.add(ring);
-      this.animatedElements.push(ring);
-    }
   }
 
   private createAbstractGrid(enabled = true) {
@@ -605,64 +704,106 @@ export class AtriumGalleryScene {
   }
 
   private createFloatingIslands() {
-    // Create 3-5 small floating island fragments around the main stage
-    const isNightMode = this.theme.backgroundColor === 0x0a0a0f;
+    // Create 4 small floating architectural fragments (Monument Valley style)
+    // Update logic to detect night mode based on new background color (0x0f172a) or old one (0x0a0a0f)
+    const isNightMode = this.theme.backgroundColor === 0x0f172a || this.theme.backgroundColor === 0x0a0a0f;
     const islandCount = 4;
     
     const islandConfigs = [
-      { distance: 25, angle: 0.3, height: -2, size: 2.5 },
-      { distance: 28, angle: 2.0, height: -5, size: 2.0 },
-      { distance: 30, angle: 3.8, height: -3, size: 3.0 },
-      { distance: 26, angle: 5.2, height: -4, size: 2.2 },
+      { distance: 22, angle: 0.3, height: -1, scale: 1.2 },
+      { distance: 25, angle: 2.0, height: -4, scale: 1.0 },
+      { distance: 26, angle: 3.8, height: -2, scale: 1.5 },
+      { distance: 24, angle: 5.2, height: -3, scale: 1.1 },
     ];
+
+    // Helper: Create a simple staircase
+    const createStairs = (steps: number, width: number, height: number, depth: number, color: number) => {
+      const geometry = new THREE.BoxGeometry(width, height / steps, depth);
+      const material = new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.4,
+        metalness: 0.1,
+        flatShading: true,
+      });
+      
+      const group = new THREE.Group();
+      for (let i = 0; i < steps; i++) {
+        const step = new THREE.Mesh(geometry, material);
+        step.position.y = i * (height / steps);
+        step.position.z = i * (depth * 0.8); // Overlap slightly
+        step.castShadow = true;
+        step.receiveShadow = true;
+        group.add(step);
+      }
+      return group;
+    };
+
+    // Helper: Create a simple tower
+    const createTower = (height: number, width: number, color: number) => {
+      const geometry = new THREE.CylinderGeometry(width, width, height, 6); // Hexagonal tower
+      const material = new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.4,
+        metalness: 0.1,
+        flatShading: true,
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      return mesh;
+    };
 
     islandConfigs.forEach((config, index) => {
       const islandGroup = new THREE.Group();
-      
-      // Main island body - irregular shape
-      const baseGeometry = new THREE.DodecahedronGeometry(config.size, 0);
-      const baseMaterial = new THREE.MeshStandardMaterial({
-        color: isNightMode ? 0x1a1a2e : 0xe8dcc8,
-        roughness: 0.8,
-        metalness: 0.2,
+      // Day: Warm Beige / Orange | Night: Cool Slate / Blue
+      const baseColor = isNightMode ? 0x1e293b : 0xe8dcc8; // Night: Slate-800, Day: Beige
+      const accentColor = isNightMode ? 0x38bdf8 : 0xff8844; // Night: Sky-400, Day: Orange
+
+      // 1. Base Platform (Inverted Pyramid)
+      const baseGeo = new THREE.CylinderGeometry(config.scale * 2, 0.2, config.scale * 3, 5);
+      const baseMat = new THREE.MeshStandardMaterial({
+        color: baseColor,
+        roughness: isNightMode ? 0.4 : 0.6, // Night: smoother, Day: matte stone
+        metalness: isNightMode ? 0.6 : 0.1, // Night: metallic, Day: stone
+        flatShading: true,
       });
-      const islandBase = new THREE.Mesh(baseGeometry, baseMaterial);
-      islandBase.castShadow = true;
-      islandGroup.add(islandBase);
-      
-      // Add small downward spike
-      const spikeGeometry = new THREE.ConeGeometry(config.size * 0.4, config.size * 1.2, 6);
-      const spikeMaterial = new THREE.MeshStandardMaterial({
-        color: isNightMode ? 0x252538 : 0xd4cfc4,
-        roughness: 0.7,
-        metalness: 0.3,
-      });
-      const spike = new THREE.Mesh(spikeGeometry, spikeMaterial);
-      spike.position.y = -config.size * 0.8;
-      spike.rotation.x = Math.PI;
-      islandGroup.add(spike);
-      
-      // Add glow ring
-      const ringGeometry = new THREE.TorusGeometry(config.size * 0.8, 0.08, 8, 24);
-      const ringMaterial = new THREE.MeshBasicMaterial({
-        color: isNightMode ? 0x4466ff : 0xff8844,
-        transparent: true,
-        opacity: 0.15,
-        depthWrite: false,
-      });
-      const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-      ring.rotation.x = Math.PI / 2;
-      ring.renderOrder = 2;
-      islandGroup.add(ring);
-      this.animatedElements.push(ring);
+      const base = new THREE.Mesh(baseGeo, baseMat);
+      base.position.y = -config.scale * 1.5;
+      islandGroup.add(base);
+
+      // 2. Top Architecture (Varied per island)
+      if (index % 2 === 0) {
+        // Type A: Stairs leading to nowhere
+        const stairs = createStairs(5, config.scale, config.scale * 1.5, config.scale * 0.4, baseColor);
+        stairs.position.y = 0.1;
+        stairs.position.x = -config.scale * 0.5;
+        islandGroup.add(stairs);
+
+        // Add an arch or pillar
+        const pillar = createTower(config.scale * 2, config.scale * 0.3, accentColor);
+        pillar.position.x = config.scale * 0.8;
+        pillar.position.y = config.scale;
+        islandGroup.add(pillar);
+      } else {
+        // Type B: Twin Towers
+        const t1 = createTower(config.scale * 2.5, config.scale * 0.4, baseColor);
+        t1.position.x = -config.scale * 0.5;
+        t1.position.y = config.scale * 1.25;
+        islandGroup.add(t1);
+
+        const t2 = createTower(config.scale * 1.5, config.scale * 0.3, baseColor);
+        t2.position.x = config.scale * 0.5;
+        t2.position.y = config.scale * 0.75;
+        islandGroup.add(t2);
+      }
       
       // Position island
       const x = Math.cos(config.angle) * config.distance;
       const z = Math.sin(config.angle) * config.distance;
       islandGroup.position.set(x, config.height, z);
       
-      // Random initial rotation
-      islandGroup.rotation.y = Math.random() * Math.PI * 2;
+      // Look at center but keep upright
+      islandGroup.lookAt(0, config.height, 0);
       
       this.scene.add(islandGroup);
       this.animatedElements.push(islandGroup);
@@ -675,6 +816,7 @@ export class AtriumGalleryScene {
     
     const beamGeometry = new THREE.CylinderGeometry(1.5, 2.5, 30, 32, 1, true);
     const beamMaterial = new THREE.MeshBasicMaterial({
+      // Day: Warm Peach | Night: Cool Blue
       color: isNightMode ? 0x6688ff : 0xffd4a3,
       transparent: true,
       opacity: 0.08,
@@ -694,7 +836,8 @@ export class AtriumGalleryScene {
 
   private createHolographicScreen() {
     // Create curved holographic screen around the stage perimeter
-    const isNightMode = this.theme.backgroundColor === 0x0a0a0f;
+    // Update logic: use the new night background color
+    const isNightMode = this.theme.backgroundColor === 0x0f172a || this.theme.backgroundColor === 0x0a0a0f;
     const screenGroup = new THREE.Group();
     
     // Curved screen parameters
@@ -721,7 +864,7 @@ export class AtriumGalleryScene {
       opacity: 0.12,
       roughness: 0.1,
       metalness: 0.9,
-      emissive: isNightMode ? 0x2244aa : 0xffaa66,
+      emissive: isNightMode ? 0x2244aa : 0xffaa66, // Day: Warm Orange Glow
       emissiveIntensity: 0.15,
       side: THREE.DoubleSide,
     });
@@ -731,7 +874,7 @@ export class AtriumGalleryScene {
     screenGroup.add(screen);
     
     // Glowing frame elements
-    const frameColor = isNightMode ? 0x4488ff : 0xff8844;
+    const frameColor = isNightMode ? 0x4488ff : 0xff8844; // Day: Orange Frame
     const frameMaterial = new THREE.LineBasicMaterial({
       color: frameColor,
       transparent: true,
@@ -869,8 +1012,8 @@ export class AtriumGalleryScene {
       const orbGeometry = new THREE.SphereGeometry(0.3, 16, 16);
       const orbMaterial = new THREE.MeshBasicMaterial({
         color: isNightMode ? 
-          [0x88aaff, 0xff88aa, 0xffaa88][i % 3] : 
-          [0xffd4a3, 0xffb88c, 0xff8844][i % 3],
+          [0x88aaff, 0xaa88ff, 0x88ffaa][i % 3] : 
+          [0xffd4a3, 0xffb88c, 0xff8844][i % 3], // Day: Warm array
         transparent: true,
         opacity: 0.6,
       });
@@ -1203,6 +1346,10 @@ export class AtriumGalleryScene {
   updateAudienceSeats(subscriberCount: number, maxDisplay: number = 50) {
     const maxSeats = this.audienceSeatPositions.length;
     
+    // Update island base style based on subscriber count
+    // This adds progression: start with simple geometric base, evolve to Laputa style
+    this.updateFloatingIslandBaseStyle(subscriberCount);
+    
     // Determine how many seats to show
     const actualSubscribers = Math.min(subscriberCount, maxSeats);
     const seatsToShow = Math.min(actualSubscribers, maxDisplay);
@@ -1422,6 +1569,16 @@ export class AtriumGalleryScene {
     // Animated platform elements
     this.animatedElements.forEach((element, index) => {
       if (element instanceof THREE.Mesh) {
+        // Handle dedicated breathing effect
+        if (element.userData.isBreathing && element.material instanceof THREE.MeshBasicMaterial) {
+           const baseOpacity = element.userData.baseOpacity || 0.5;
+           const speed = element.userData.breathingSpeed || 1.0;
+           const range = element.userData.breathingRange || 0.3;
+           // Breathing sine wave
+           element.material.opacity = baseOpacity + Math.sin(time * speed + index * 0.5) * range;
+           return; // Skip default animation
+        }
+
         if (element.material instanceof THREE.MeshBasicMaterial) {
           const baseOpacity = this.theme.rimOpacity;
           element.material.opacity = baseOpacity + Math.sin(time * 1.2 + index * 0.5) * (baseOpacity * 0.4);
@@ -1602,6 +1759,30 @@ export class AtriumGalleryScene {
       beam.rotation.y += deltaTime * 0.5;
     });
 
+    // Animate Guardian Stones
+    this.guardianStones.forEach(group => {
+      const data = group.userData;
+      const time = Date.now() * 0.001;
+      
+      // Orbit
+      data.angle += deltaTime * data.speed * 0.5;
+      group.position.x = Math.cos(data.angle) * data.radius;
+      group.position.z = Math.sin(data.angle) * data.radius;
+      
+      // Bobbing
+      group.position.y = Math.sin(time * data.bobSpeed) * data.bobHeight;
+      
+      // Self rotation
+      group.rotation.x += deltaTime * data.rotationSpeed;
+      group.rotation.y += deltaTime * data.rotationSpeed;
+      
+      // Pulse wireframe
+      const wireframe = group.children.find(c => c instanceof THREE.LineSegments) as THREE.LineSegments;
+      if (wireframe && wireframe.material instanceof THREE.LineBasicMaterial) {
+        wireframe.material.opacity = 0.4 + Math.sin(time * 2) * 0.3;
+      }
+    });
+
     // Animate smoke particles
     if (this.smokeParticles) {
       const positions = this.smokeParticles.geometry.attributes.position.array as Float32Array;
@@ -1718,21 +1899,26 @@ export class AtriumGalleryScene {
 
     this.currentWeatherParams = params;
 
-    // 1. Update sky color
-    if (this.scene.background instanceof THREE.Color) {
-      const skyColor = new THREE.Color(params.skyColor);
-      this.scene.background.copy(skyColor);
+    // 1. Update sky color (Gradient)
+    const skyColor = new THREE.Color(params.skyColor);
+    const topColor = skyColor.clone().offsetHSL(0, 0, -0.1);
+    const bottomColor = skyColor.clone().offsetHSL(0, 0, 0.1);
+    
+    // Clean up old texture if it exists
+    if (this.scene.background instanceof THREE.Texture) {
+      this.scene.background.dispose();
     }
+    this.scene.background = this.createGradientTexture(topColor, bottomColor);
 
     // 2. Update fog
     if (this.scene.fog) {
       const fogColor = new THREE.Color(params.fogColor);
       if (this.scene.fog instanceof THREE.Fog) {
         this.scene.fog.color.copy(fogColor);
-        const baseFar = 70;
-        const baseNear = 25;
-        this.scene.fog.far = baseFar - (params.fogDensity * 30);
-        this.scene.fog.near = baseNear - (params.fogDensity * 15);
+        const baseFar = 120; // Updated base
+        const baseNear = 50; // Updated base
+        this.scene.fog.far = baseFar - (params.fogDensity * 40);
+        this.scene.fog.near = baseNear - (params.fogDensity * 20);
       }
     }
 
@@ -1823,12 +2009,76 @@ export class AtriumGalleryScene {
       this.updateFloatingOrbs(params.floatingOrbCount);
     }
 
-    // 12. Update energy beams
+    // 12. Update theme-dependent colors (Screen, Platform, etc.)
+    this.updateThemeColors();
+
+    // 13. Update energy beams
     if (params.energyBeamIntensity !== undefined) {
       this.updateEnergyBeams(params.energyBeamIntensity);
     }
 
     console.log('✅ Scene weather updated successfully');
+  }
+
+  /**
+   * Update theme-dependent colors for existing objects
+   * Ensures elements like the holographic screen update when day/night changes
+   */
+  private updateThemeColors() {
+    const isNightMode = this.theme.backgroundColor === 0x0f172a || this.theme.backgroundColor === 0x0a0a0f;
+
+    // 1. Update Holographic Screen
+    if (this.holographicScreen) {
+      // Screen mesh
+      const screen = this.holographicScreen.children.find(c => c.name === 'videoScreen') as THREE.Mesh;
+      if (screen && screen.material instanceof THREE.MeshStandardMaterial) {
+        screen.material.color.setHex(isNightMode ? 0x1a2040 : 0xf0f8ff);
+        screen.material.emissive.setHex(isNightMode ? 0x2244aa : 0xffaa66);
+      }
+
+      // Frame lines
+      const frameColor = isNightMode ? 0x4488ff : 0xff8844;
+      this.holographicScreen.children.forEach(child => {
+        if (child instanceof THREE.Line && child.material instanceof THREE.LineBasicMaterial) {
+          child.material.color.setHex(frameColor);
+        }
+        // Corner accents
+        if (child instanceof THREE.Mesh && child.geometry instanceof THREE.OctahedronGeometry && child.material instanceof THREE.MeshBasicMaterial) {
+          child.material.color.setHex(frameColor);
+        }
+        // Outer glow
+        if (child instanceof THREE.Mesh && child !== screen && child.geometry instanceof THREE.CylinderGeometry && child.material instanceof THREE.MeshBasicMaterial) {
+           child.material.color.setHex(frameColor);
+        }
+      });
+    }
+
+    // 2. Update Platform
+    const platformGroup = this.scene.children.find(c => c instanceof THREE.Group && c.children.some(child => child instanceof THREE.Mesh && child.geometry instanceof THREE.CylinderGeometry && child.position.y === 0));
+    
+    if (platformGroup) {
+       const topPlatform = platformGroup.children[0] as THREE.Mesh;
+       const midPlatform = platformGroup.children[1] as THREE.Mesh;
+       const bottomPlatform = platformGroup.children[2] as THREE.Mesh;
+       
+       if (topPlatform && topPlatform.material instanceof THREE.MeshStandardMaterial) {
+         topPlatform.material.color.setHex(isNightMode ? 0x475569 : this.theme.platformColor);
+         topPlatform.material.roughness = isNightMode ? 0.4 : 0.1;
+         topPlatform.material.metalness = isNightMode ? 0.5 : 0.1;
+         topPlatform.material.emissive.setHex(isNightMode ? 0x1e293b : 0xffffff);
+         topPlatform.material.emissiveIntensity = isNightMode ? 0.25 : 0.15;
+       }
+       
+       if (midPlatform && midPlatform.material instanceof THREE.MeshStandardMaterial) {
+         midPlatform.material.color.setHex(isNightMode ? 0x334155 : this.theme.platformColor);
+         midPlatform.material.emissive.setHex(isNightMode ? 0x0f172a : this.theme.platformColor);
+       }
+       
+       if (bottomPlatform && bottomPlatform.material instanceof THREE.MeshStandardMaterial) {
+         bottomPlatform.material.color.setHex(isNightMode ? 0x1e293b : this.theme.platformColor);
+         bottomPlatform.material.emissive.setHex(isNightMode ? 0x020617 : this.theme.platformColor);
+       }
+    }
   }
 
   /**
@@ -1871,9 +2121,9 @@ export class AtriumGalleryScene {
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         geometry.setAttribute('velocity', new THREE.BufferAttribute(velocities, 3));
 
-        const material = new THREE.PointsMaterial({
+          const material = new THREE.PointsMaterial({
           size: params.weatherType === 'snowy' ? 0.5 : 0.25,
-          color: params.weatherType === 'snowy' ? 0xffffff : 0xaaaaaa,
+          color: params.weatherType === 'snowy' ? 0xffffff : 0x8899aa, // Colder blue-grey for rain
           transparent: true,
           opacity: params.particleIntensity * 0.8,
           depthWrite: false,
@@ -1895,7 +2145,7 @@ export class AtriumGalleryScene {
           spotlight.intensity *= 1.3;
           break;
         case 'melancholic':
-          spotlight.intensity *= 0.7;
+          spotlight.intensity *= 0.65; // 調整為 0.65，在陰冷和可見度之間平衡
           break;
         case 'mysterious':
           spotlight.intensity *= 0.8;
@@ -1946,7 +2196,8 @@ export class AtriumGalleryScene {
     switch (state) {
       case 'glowing':
         if (platform.material instanceof THREE.MeshStandardMaterial) {
-          platform.material.emissive.setHex(0xFFD700);
+          // Day: Gold | Night: Cyan
+          platform.material.emissive.setHex(this.theme.backgroundColor === 0x0a0a0f ? 0x00ffff : 0xFFD700);
           platform.material.emissiveIntensity = 0.5;
         }
         break;
@@ -2114,8 +2365,14 @@ export class AtriumGalleryScene {
     this.fishSchool.forEach(fish => {
       this.scene.remove(fish);
       fish.geometry.dispose();
+      // Material disposal handled below if unique, but if shared we need to be careful.
+      // Here we assume we are replacing all fish, so we can dispose their materials if they were unique.
       if (fish.material instanceof THREE.Material) {
-        fish.material.dispose();
+         // If we switch to shared materials, we shouldn't dispose them here unless we track them.
+         // For now, let's assume we might re-create them. 
+         // Actually, to be safe with shared materials, we should NOT dispose them blindly if shared.
+         // But since we are about to create new ones, let's just dispose for now and re-create to be safe, 
+         // OR better: use a pool of materials.
       }
     });
     this.fishSchool = [];
@@ -2132,18 +2389,26 @@ export class AtriumGalleryScene {
     const fishGeometry = new THREE.ConeGeometry(0.3, 0.8, 4);
     fishGeometry.rotateZ(Math.PI / 2);
 
-    for (let i = 0; i < fishCount; i++) {
-      // Underwater colors - brighter for visibility
-      const hue = 0.55 + Math.random() * 0.1; // Cyan-Blue range
-      const saturation = 0.6 + Math.random() * 0.3; // Higher saturation
-      const lightness = 0.4 + Math.random() * 0.2; // Brighter
+    // Performance Optimization: Create a palette of shared materials
+    const materialPalette: THREE.MeshPhongMaterial[] = [];
+    const paletteSize = 5;
+    for(let i=0; i<paletteSize; i++) {
+      const hue = 0.55 + (i / paletteSize) * 0.1; // Range 0.55 - 0.65
+      const saturation = 0.7;
+      const lightness = 0.5;
       
-      const fishMaterial = new THREE.MeshPhongMaterial({
+      materialPalette.push(new THREE.MeshPhongMaterial({
         color: new THREE.Color().setHSL(hue, saturation, lightness),
         shininess: 50,
-        emissive: new THREE.Color().setHSL(hue, saturation, 0.2), // Stronger glow
+        emissive: new THREE.Color().setHSL(hue, saturation, 0.2),
         emissiveIntensity: 0.4,
-      });
+      }));
+    }
+
+    for (let i = 0; i < fishCount; i++) {
+      // Assign material from palette
+      const materialIndex = i % paletteSize;
+      const fishMaterial = materialPalette[materialIndex];
 
       const fish = new THREE.Mesh(fishGeometry, fishMaterial);
 
@@ -2178,38 +2443,37 @@ export class AtriumGalleryScene {
    * Update floating orbs based on market activity
    */
   private updateFloatingOrbs(orbCount: number) {
-    // Remove existing extra orbs (keep the old ones and adjust count)
+    // Remove existing extra orbs
     while (this.floatingOrbs.length > orbCount) {
       const orb = this.floatingOrbs.pop();
       if (orb) {
         this.scene.remove(orb);
         orb.geometry.dispose();
+        // Avoid disposing shared materials if we implement sharing here too
         if (orb.material instanceof THREE.Material) {
-          orb.material.dispose();
+          // orb.material.dispose(); // Commented out for safety if sharing
         }
       }
     }
 
     console.log(`💫 Adjusting floating orbs: ${orbCount} orbs`);
 
-    // Add new orbs if needed
-    while (this.floatingOrbs.length < orbCount) {
-      const orbGeometry = new THREE.SphereGeometry(0.3, 16, 16);
-      const orbMaterial = new THREE.MeshStandardMaterial({
-        color: new THREE.Color().setHSL(
-          Math.random(),
-          0.7,
-          0.6
-        ),
-        emissive: new THREE.Color().setHSL(
-          Math.random(),
-          0.8,
-          0.4
-        ),
+    // Create palette for orbs too
+    const orbMaterialPalette: THREE.MeshStandardMaterial[] = [];
+    for(let i=0; i<3; i++) {
+       orbMaterialPalette.push(new THREE.MeshStandardMaterial({
+        color: new THREE.Color().setHSL(Math.random(), 0.7, 0.6),
+        emissive: new THREE.Color().setHSL(Math.random(), 0.8, 0.4),
         emissiveIntensity: 0.5,
         transparent: true,
         opacity: 0.8,
-      });
+      }));
+    }
+
+    // Add new orbs if needed
+    while (this.floatingOrbs.length < orbCount) {
+      const orbGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+      const orbMaterial = orbMaterialPalette[this.floatingOrbs.length % 3];
 
       const orb = new THREE.Mesh(orbGeometry, orbMaterial);
 
@@ -2259,10 +2523,12 @@ export class AtriumGalleryScene {
     const beamCount = Math.floor(3 + intensity * 2);
     const beamGeometry = new THREE.CylinderGeometry(0.4, 0.4, 15, 8);
 
+    const isNightMode = this.theme.backgroundColor === 0x0a0a0f;
+
     for (let i = 0; i < beamCount; i++) {
       const beamMaterial = new THREE.MeshBasicMaterial({
         color: new THREE.Color().setHSL(
-          0.15 + Math.random() * 0.1, // Yellow-orange
+          isNightMode ? 0.55 + Math.random() * 0.1 : 0.15 + Math.random() * 0.1, // Blue vs Yellow-Orange
           1.0,
           0.6 + intensity * 0.3
         ),

@@ -1,288 +1,169 @@
 /**
- * Seal Content Encryption Service
- * Handles encryption and decryption of content (video, text/markdown) for subscription-based access
+ * Seal 加解密服務 - 簡化版，對照 test-seal-simple.js
  */
 
-import { SealClient, DemType, SessionKey } from '@mysten/seal';
+import { SealClient, SessionKey } from '@mysten/seal';
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
+import { Transaction } from '@mysten/sui/transactions';
 import { fromHex } from '@mysten/sui/utils';
-import { SEAL_CONFIG, getSealKeyServers } from '@/config/seal';
-import { sealApproveBySubscription } from '@/utils/transactions';
+import { SEAL_CONFIG, getSealKeyServers } from '../config/seal';
 
-type SuiJsonRpcClient = any;
-
-export interface ContentEncryptionResult {
-  encryptedBlob: Blob;
-  resourceId: string;
-  metadata: {
-    encrypted: boolean;
-    originalSize: number;
-    encryptedSize: number;
-    encryptionDate: string;
-    contentType: string; // 'video/mp4', 'text/markdown', etc.
-  };
-}
-
-export interface ContentEncryptionOptions {
-  spaceKioskId: string;
-  title?: string;
-  contentType?: string; // MIME type
-}
+// 測試用 package ID (來自 test-seal-simple.js)
+const TEST_PACKAGE_ID = '0x0a3cafc5e183fd49d4b4bc0a737ebd3a3f8b20701c3e0ff32ea01a3c40b14ab0';
 
 let sealClientInstance: SealClient | null = null;
 
-function getSealClient(network: 'testnet' | 'mainnet' = 'testnet'): SealClient {
+// 全局解密鎖，防止重複解密相同內容
+const decryptionLocks = new Map<string, Promise<Uint8Array>>();
+
+function getSealClient(): SealClient {
   if (!sealClientInstance) {
-    const keyServers = getSealKeyServers(network);
-    const serverConfigs = keyServers.map(server => ({
-      objectId: server.objectId,
-      weight: server.weight,
-    }));
-
-    console.log('🔐 Initializing Seal Client for content encryption');
-
-    const suiClient = new SuiClient({ 
-      url: getFullnodeUrl(network) 
-    }) as SuiJsonRpcClient;
+    const keyServers = getSealKeyServers('testnet');
+    const suiClient = new SuiClient({ url: getFullnodeUrl('testnet') });
 
     sealClientInstance = new SealClient({
       suiClient,
-      serverConfigs,
-      verifyKeyServers: SEAL_CONFIG.verifyKeyServers,
-      timeout: SEAL_CONFIG.timeout,
+      serverConfigs: keyServers.map(s => ({ objectId: s.objectId, weight: 1 })),
+      verifyKeyServers: false, // 測試模式
     });
   }
-
   return sealClientInstance;
 }
 
 /**
- * Encrypt content file using Seal SDK with SessionKey
- * This allows subscription-based access control
+ * 加密內容（對照 test-seal-simple.js）
  */
 export async function encryptContent(
   file: File | Blob,
-  options: ContentEncryptionOptions,
-  userAddress: string,
-  signPersonalMessage: (message: Uint8Array) => Promise<{ signature: string }>,
-  network: 'testnet' | 'mainnet' = 'testnet'
-): Promise<ContentEncryptionResult> {
-  try {
-    console.log('🔐 Encrypting content with Seal...', {
-      fileSize: file.size,
-      spaceKioskId: options.spaceKioskId,
-      contentType: options.contentType || file.type
-    });
+  spaceId: string,
+): Promise<{ encryptedBlob: Blob; resourceId: string }> {
+  const fileData = new Uint8Array(await file.arrayBuffer());
+  const resourceId = spaceId.replace('0x', '');
 
-    const contentType = options.contentType || file.type;
+  const sealClient = getSealClient();
+  const { encryptedObject } = await sealClient.encrypt({
+    threshold: 2,
+    packageId: TEST_PACKAGE_ID,
+    id: resourceId,
+    data: fileData,
+  });
 
-    // Check if Seal is enabled
-    if (!SEAL_CONFIG.enabled) {
-      console.warn('⚠️ Seal is disabled, returning unencrypted');
-      const blob = new Blob([await file.arrayBuffer()], { type: contentType });
-      return {
-        encryptedBlob: blob,
-        resourceId: `unencrypted_${Date.now()}`,
-        metadata: {
-          encrypted: false,
-          originalSize: file.size,
-          encryptedSize: blob.size,
-          encryptionDate: new Date().toISOString(),
-          contentType,
-        },
-      };
-    }
-
-    // Convert file to Uint8Array
-    const fileBuffer = await file.arrayBuffer();
-    const fileData = new Uint8Array(fileBuffer);
-
-    // Prepare metadata
-    const metadata = {
-      fileType: contentType,
-      title: options.title || 'Untitled',
-      timestamp: Date.now(),
-      spaceKioskId: options.spaceKioskId,
-    };
-
-    // Use Atrium package ID for encryption namespace
-    const PACKAGE_ID = process.env.NEXT_PUBLIC_SPACE_PACKAGE_ID || process.env.NEXT_PUBLIC_PACKAGE_ID || "0x0";
-    const resourceId = options.spaceKioskId.replace('0x', '');
-    const suiClient = new SuiClient({ url: getFullnodeUrl(network) });
-
-    // Create SessionKey for encryption
-    const sessionKey = await SessionKey.create({
-      address: userAddress,
-      packageId: PACKAGE_ID.toString(),
-      ttlMin: 10,
-      suiClient,
-    });
-
-    // Get personal message and request signature
-    const message = sessionKey.getPersonalMessage();
-    const { signature } = await signPersonalMessage(message);
-    sessionKey.setPersonalMessageSignature(signature);
-
-    // Get SealClient and encrypt
-    const sealClient = getSealClient(network);
-    
-    // Use AES-GCM for better performance on larger files
-    const { encryptedObject } = await sealClient.encrypt({
-      demType: DemType.AesGcm256,
-      threshold: 1,
-      packageId: PACKAGE_ID,
-      id: resourceId,
-      data: fileData,
-      aad: new TextEncoder().encode(JSON.stringify(metadata)),
-    });
-
-    const encryptedBlob = new Blob([encryptedObject], { type: 'application/octet-stream' });
-
-    console.log('✅ Content encryption completed', {
-      resourceId,
-      originalSize: file.size,
-      encryptedSize: encryptedBlob.size,
-    });
-
-    return {
-      encryptedBlob,
-      resourceId,
-      metadata: {
-        encrypted: true,
-        originalSize: file.size,
-        encryptedSize: encryptedBlob.size,
-        encryptionDate: new Date().toISOString(),
-        contentType,
-      },
-    };
-  } catch (error) {
-    console.error('❌ Content encryption failed:', error);
-    
-    // Fallback to unencrypted
-    const blob = new Blob([await file.arrayBuffer()], { type: options.contentType || file.type });
-    return {
-      encryptedBlob: blob,
-      resourceId: `fallback_${Date.now()}`,
-      metadata: {
-        encrypted: false,
-        originalSize: file.size,
-        encryptedSize: blob.size,
-        encryptionDate: new Date().toISOString(),
-        contentType: options.contentType || file.type,
-      },
-    };
-  }
+  return {
+    encryptedBlob: new Blob([encryptedObject], { type: 'application/octet-stream' }),
+    resourceId,
+  };
 }
 
 /**
- * Decrypt content using Seal SDK with SessionKey
- * Requires valid subscription
+ * 解密內容（對照 test-seal-simple.js）
  */
 export async function decryptContent(
   encryptedData: Uint8Array,
-  resourceId: string,
+  spaceId: string,
   userAddress: string,
   signPersonalMessage: (message: Uint8Array) => Promise<{ signature: string }>,
-  network: 'testnet' | 'mainnet' = 'testnet',
-  expectedContentType: string = 'application/octet-stream'
-): Promise<Blob> {
-  try {
-    console.log('🔓 Decrypting content with Seal...', {
-      dataSize: encryptedData.length,
-      resourceId,
-      userAddress,
-    });
-
-    const PACKAGE_ID = process.env.NEXT_PUBLIC_SPACE_PACKAGE_ID || process.env.NEXT_PUBLIC_PACKAGE_ID || "0x0";
-    const suiClient = new SuiClient({ url: getFullnodeUrl(network) });
-
-    // Create SessionKey for decryption
-    const sessionKey = await SessionKey.create({
-      address: userAddress,
-      packageId: PACKAGE_ID,
-      ttlMin: 10,
-      suiClient,
-    });
-
-    // Get personal message and request signature
-    const message = sessionKey.getPersonalMessage();
-    const { signature } = await signPersonalMessage(message);
-    sessionKey.setPersonalMessageSignature(signature);
-
-    // Build transaction to verify subscription access using unified transaction builder
-    const spaceKioskId = resourceId.startsWith('0x') ? resourceId : `0x${resourceId}`;
-    const tx = sealApproveBySubscription(fromHex(resourceId), spaceKioskId);
-
-    // Build transaction bytes
-    const txBytes = await tx.build({ client: suiClient });
-
-    // Get SealClient and decrypt
-    const sealClient = getSealClient(network);
-    const decryptedData = await sealClient.decrypt({
-      data: encryptedData,
-      txBytes,
-      sessionKey,
-    });
-
-    const blob = new Blob([new Uint8Array(decryptedData)], { type: expectedContentType });
-
-    console.log('✅ Content decryption completed', {
-      decryptedSize: blob.size,
-      type: expectedContentType
-    });
-
-    return blob;
-  } catch (error) {
-    console.error('❌ Content decryption failed:', error);
-    throw new Error('Failed to decrypt content. Please ensure you have an active subscription.');
+): Promise<Uint8Array> {
+  // 創建唯一鎖 key（基於 spaceId + userAddress）
+  const lockKey = `${spaceId}-${userAddress}`;
+  
+  // 如果已經有相同的解密請求在進行中，直接返回該 Promise
+  if (decryptionLocks.has(lockKey)) {
+    console.log('🔒 Reusing existing decryption request for', lockKey);
+    return decryptionLocks.get(lockKey)!;
   }
+
+  console.log('🆕 Starting new decryption request for', lockKey);
+  
+  // 創建解密 Promise 並存儲
+  const decryptPromise = (async () => {
+    try {
+      const suiClient = new SuiClient({ url: getFullnodeUrl('testnet') });
+
+      // 1. 創建 SessionKey
+      const sessionKey = await SessionKey.create({
+        address: userAddress,
+        packageId: TEST_PACKAGE_ID,
+        ttlMin: 10,
+        suiClient,
+      });
+
+      // 2. 簽名（只有這一次簽名！）
+      const message = sessionKey.getPersonalMessage();
+      console.log('🔑 Requesting signature...');
+      const { signature } = await signPersonalMessage(message);
+      console.log('✅ Signature obtained');
+      sessionKey.setPersonalMessageSignature(signature);
+
+      // 3. 建構 seal_approve 交易
+      const resourceIdBytes = fromHex(spaceId.replace('0x', ''));
+      const tx = new Transaction();
+      tx.moveCall({
+        target: `${TEST_PACKAGE_ID}::seal_test::seal_approve`,
+        arguments: [tx.pure.vector('u8', Array.from(resourceIdBytes))],
+      });
+
+      const txBytes = await tx.build({
+        client: suiClient,
+        onlyTransactionKind: true,
+      });
+
+      // 4. 解密
+      const sealClient = getSealClient();
+      const decryptedData = await sealClient.decrypt({
+        data: encryptedData,
+        sessionKey,
+        txBytes,
+      });
+
+      return decryptedData;
+    } finally {
+      // 無論成功或失敗，都清除鎖
+      decryptionLocks.delete(lockKey);
+      console.log('🔓 Decryption request completed, lock released for', lockKey);
+    }
+  })();
+
+  // 存儲 Promise
+  decryptionLocks.set(lockKey, decryptPromise);
+  
+  return decryptPromise;
 }
 
 /**
- * Download and decrypt content from Walrus
+ * 從 Walrus 下載並解密內容
  */
 export async function downloadAndDecryptContent(
   blobId: string,
-  resourceId: string,
+  spaceId: string,
   userAddress: string,
   signPersonalMessage: (message: Uint8Array) => Promise<{ signature: string }>,
   contentType: string,
-  network: 'testnet' | 'mainnet' = 'testnet'
 ): Promise<string> {
-  try {
-    // Download encrypted content from Walrus
-    // Using aggregator URL
-    const aggregatorUrl = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR || "https://aggregator.walrus-testnet.walrus.space";
-    const response = await fetch(
-      `${aggregatorUrl}/v1/blobs/${blobId}`
-    );
-    
-    if (!response.ok) {
-      throw new Error('Failed to download content from Walrus');
-    }
-
-    const encryptedData = new Uint8Array(await response.arrayBuffer());
-
-    // Decrypt content
-    const decryptedBlob = await decryptContent(
-      encryptedData,
-      resourceId,
-      userAddress,
-      signPersonalMessage,
-      network,
-      contentType
-    );
-
-    // Create object URL for playback/display
-    if (contentType === 'text/markdown' || contentType === 'text/plain') {
-       return await decryptedBlob.text();
-    }
-    
-    const url = URL.createObjectURL(decryptedBlob);
-    return url;
-  } catch (error) {
-    console.error('Error downloading and decrypting content:', error);
-    throw error;
+  // 1. 從 Walrus 下載加密內容
+  const aggregatorUrl = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR || 
+    "https://aggregator.walrus-testnet.walrus.space";
+  const response = await fetch(`${aggregatorUrl}/v1/blobs/${blobId}`);
+  
+  if (!response.ok) {
+    throw new Error(`Failed to download: HTTP ${response.status}`);
   }
-}
 
+  const encryptedData = new Uint8Array(await response.arrayBuffer());
+
+  // 2. 解密
+  const decryptedData = await decryptContent(
+    encryptedData,
+    spaceId,
+    userAddress,
+    signPersonalMessage,
+  );
+
+  // 3. 返回結果
+  const blob = new Blob([new Uint8Array(decryptedData)], { type: contentType });
+  
+  if (contentType === 'text/markdown' || contentType === 'text/plain') {
+    return await blob.text();
+  }
+
+  return URL.createObjectURL(blob);
+}

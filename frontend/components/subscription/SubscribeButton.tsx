@@ -9,12 +9,13 @@ import { RetroButton } from "@/components/common/RetroButton";
 interface SubscribeButtonProps {
   spaceKioskId: string;
   spaceKioskCapId: string; // Added this
+  creatorAddress: string;  // Added for PTB - creator's wallet address
   price: string;
   identityId: string | null;
   onSubscribed: () => void;
 }
 
-export function SubscribeButton({ spaceKioskId, spaceKioskCapId, price, identityId, onSubscribed }: SubscribeButtonProps) {
+export function SubscribeButton({ spaceKioskId, spaceKioskCapId, creatorAddress, price, identityId, onSubscribed }: SubscribeButtonProps) {
   const currentAccount = useCurrentAccount();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const [loading, setLoading] = useState(false);
@@ -38,7 +39,9 @@ export function SubscribeButton({ spaceKioskId, spaceKioskCapId, price, identity
         identityId,
         spaceKioskId,
         priceInMist,
-        duration
+        duration,
+        currentAccount.address,  // Subscriber address for PTB
+        creatorAddress           // Creator address for PTB
       );
 
       signAndExecute(

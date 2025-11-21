@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
-import { uploadToWalrus } from "@/services/walrusApi";
+import { uploadBlobToWalrus } from "@/services/walrusApi";
 import { initializeSpace, MIST_PER_SUI, SUI_CHAIN } from "@/utils/transactions";
 import { PACKAGE_ID } from "@/config/sui";
 
@@ -58,7 +58,7 @@ export function CreateSpaceButton({ onCreated }: CreateSpaceButtonProps) {
       // Upload cover image to Walrus
       let coverImageBlobId = "";
       if (formData.coverImage) {
-        coverImageBlobId = await uploadToWalrus(formData.coverImage);
+        coverImageBlobId = await uploadBlobToWalrus(formData.coverImage);
       }
 
       // Create empty config
@@ -70,7 +70,7 @@ export function CreateSpaceButton({ onCreated }: CreateSpaceButtonProps) {
       const configBlob = new Blob([JSON.stringify(emptyConfig)], {
         type: "application/json",
       });
-      const configQuilt = await uploadToWalrus(configBlob);
+      const configQuilt = await uploadBlobToWalrus(configBlob);
 
       // Create kiosk and initialize space
       const subscriptionPriceInMist = parseFloat(formData.subscriptionPrice) * MIST_PER_SUI;
@@ -92,8 +92,18 @@ export function CreateSpaceButton({ onCreated }: CreateSpaceButtonProps) {
           chain: SUI_CHAIN,
         },
         {
-          onSuccess: () => {
+          onSuccess: (result) => {
+            console.log('✅ Space created successfully:', result);
+            setLoading(false);
             setIsOpen(false);
+            
+            // Dispatch global event for space creation
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('atrium-space-created', { 
+                detail: { result } 
+              }));
+            }
+            
             onCreated();
             setFormData({
               name: "",
@@ -103,16 +113,27 @@ export function CreateSpaceButton({ onCreated }: CreateSpaceButtonProps) {
             });
           },
           onError: (error) => {
-            console.error("Failed to create space:", error);
-            alert(`create space failed: ${error.message}`);
+            console.error("❌ Failed to create space:", error);
+            setLoading(false);
+            
+            // Extract detailed error message
+            let errorMsg = 'Unknown error';
+            if (error instanceof Error) {
+              errorMsg = error.message;
+            } else if (typeof error === 'string') {
+              errorMsg = error;
+            } else if (error && typeof error === 'object') {
+              errorMsg = JSON.stringify(error, null, 2);
+            }
+            
+            alert(`Space creation failed:\n\n${errorMsg}\n\nPlease check:\n- Gas balance (need ~0.15 SUI)\n- Network connection\n- Console for details`);
           },
         }
       );
     } catch (error: any) {
-      console.error("Error:", error);
-      alert(`Create space failed: ${error.message}`);
-    } finally {
+      console.error("❌ Error during space creation:", error);
       setLoading(false);
+      alert(`Error: ${error.message || error}\n\nCheck console for details.`);
     }
   };
 
@@ -122,22 +143,22 @@ export function CreateSpaceButton({ onCreated }: CreateSpaceButtonProps) {
         onClick={() => setIsOpen(true)}
         className="px-6 py-3 rounded-lg bg-gradient-header text-white font-medium shadow-lg hover:shadow-xl hover:scale-105 transition-all"
       >
-        + 創建空間
+        + Create Space
       </button>
     );
   }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="glass rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="glass rounded-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto scrollbar-hidden">
         <h2 className="text-3xl font-bold bg-gradient-header bg-clip-text text-transparent mb-6">
-          創建你的空間
+          Create Your Space
         </h2>
 
         <div className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-text-primary mb-2">
-              空間名稱 *
+              Space Name *
             </label>
             <input
               type="text"
@@ -146,13 +167,13 @@ export function CreateSpaceButton({ onCreated }: CreateSpaceButtonProps) {
                 setFormData({ ...formData, name: e.target.value })
               }
               className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:border-primary-purple focus:ring-2 focus:ring-primary-purple/20 outline-none"
-              placeholder="輸入空間名稱"
+              placeholder="Enter space name"
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-text-primary mb-2">
-              描述
+              Description
             </label>
             <textarea
               value={formData.description}
@@ -161,13 +182,13 @@ export function CreateSpaceButton({ onCreated }: CreateSpaceButtonProps) {
               }
               className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:border-primary-purple focus:ring-2 focus:ring-primary-purple/20 outline-none"
               rows={3}
-              placeholder="描述你的空間..."
+              placeholder="Describe your space..."
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-text-primary mb-2">
-              訂閱價格 (SUI/天)
+              Subscription Price (SUI/day)
             </label>
             <input
               type="number"
@@ -183,7 +204,7 @@ export function CreateSpaceButton({ onCreated }: CreateSpaceButtonProps) {
 
           <div>
             <label className="block text-sm font-medium text-text-primary mb-2">
-              封面圖片
+              Cover Image
             </label>
             <input
               type="file"
@@ -204,22 +225,22 @@ export function CreateSpaceButton({ onCreated }: CreateSpaceButtonProps) {
                 hover:shadow-xl hover:scale-105
                 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? "創建中..." : "創建空間"}
+              {loading ? "Creating..." : "Create Space"}
             </button>
             <button
               onClick={() => setIsOpen(false)}
               className="px-6 py-3 rounded-lg font-medium border-2 border-gray-300 text-text-primary hover:border-primary-purple transition-all"
             >
-              取消
+              Cancel
             </button>
           </div>
 
           <p className="text-xs text-text-secondary">
-            * 創建空間需要支付 0.1 SUI 初始化費用
+            * Creating a space requires a 0.1 SUI initialization fee
           </p>
           {!identityId && (
             <p className="text-xs text-red-500 text-center">
-              需要 Identity NFT。請先註冊。
+              Identity NFT required. Please register first.
             </p>
           )}
         </div>

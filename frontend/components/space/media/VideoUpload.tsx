@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
 import { encryptVideo } from "@/services/sealVideo";
-import { uploadToWalrus } from "@/services/walrusApi";
+import { uploadBlobToWalrus } from "@/services/walrusApi";
 import { addVideo, SUI_CHAIN } from "@/utils/transactions";
 
 interface VideoUploadProps {
@@ -35,7 +35,7 @@ export function VideoUpload({ spaceKioskId, kioskCapId, onUploaded }: VideoUploa
       setUploading(true);
 
       // Step 1: Encrypt video with Seal
-      setProgress("使用 Seal 加密影片...");
+      setProgress("Encrypting video with Seal...");
       
       // TODO: Get user address and sign function from wallet
       const userAddress = useCurrentAccount()?.address || "";
@@ -52,11 +52,11 @@ export function VideoUpload({ spaceKioskId, kioskCapId, onUploaded }: VideoUploa
       );
 
       // Step 2: Upload to Walrus
-      setProgress("上傳到 Walrus...");
-      const blobId = await uploadToWalrus(encrypted.encryptedBlob);
+      setProgress("Uploading to Walrus...");
+      const blobId = await uploadBlobToWalrus(encrypted.encryptedBlob);
 
       // Step 3: Add video to space contract
-      setProgress("更新空間配置...");
+      setProgress("Updating space configuration...");
       const tx = addVideo(
         spaceKioskId,
         kioskCapId,
@@ -70,7 +70,7 @@ export function VideoUpload({ spaceKioskId, kioskCapId, onUploaded }: VideoUploa
         },
         {
           onSuccess: () => {
-            setProgress("上傳成功！");
+            setProgress("Upload successful!");
             onUploaded(blobId);
             setFile(null);
             setTitle("");
@@ -79,14 +79,14 @@ export function VideoUpload({ spaceKioskId, kioskCapId, onUploaded }: VideoUploa
           onError: (error) => {
             console.error("Failed to add video:", error);
             setProgress("");
-            alert(`上傳失敗: ${error.message}`);
+            alert(`Upload failed: ${error.message}`);
           },
         }
       );
     } catch (error: any) {
       console.error("Error uploading video:", error);
       setProgress("");
-      alert(`錯誤: ${error.message}`);
+      alert(`Error: ${error.message}`);
     } finally {
       setUploading(false);
     }
@@ -96,20 +96,20 @@ export function VideoUpload({ spaceKioskId, kioskCapId, onUploaded }: VideoUploa
     <div className="space-y-4">
       <div>
         <label className="block text-sm font-medium text-text-primary mb-2">
-          影片標題
+          Video Title
         </label>
         <input
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="輸入影片標題"
+          placeholder="Enter video title"
           className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:border-primary-purple focus:ring-2 focus:ring-primary-purple/20 outline-none"
         />
       </div>
 
       <div>
         <label className="block text-sm font-medium text-text-primary mb-2">
-          影片檔案
+          Video File
         </label>
         <input
           type="file"
@@ -119,7 +119,7 @@ export function VideoUpload({ spaceKioskId, kioskCapId, onUploaded }: VideoUploa
         />
         {file && (
           <p className="text-xs text-text-secondary mt-2">
-            檔案大小: {(file.size / 1024 / 1024).toFixed(2)} MB
+            File Size: {(file.size / 1024 / 1024).toFixed(2)} MB
           </p>
         )}
       </div>
@@ -138,11 +138,11 @@ export function VideoUpload({ spaceKioskId, kioskCapId, onUploaded }: VideoUploa
           hover:shadow-xl hover:scale-105
           disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
       >
-        {uploading ? "上傳中..." : "加密並上傳"}
+        {uploading ? "Uploading..." : "Encrypt and Upload"}
       </button>
 
       <p className="text-xs text-text-secondary text-center">
-        影片將使用 Seal 加密，只有訂閱者可以觀看
+        The video will be encrypted with Seal, only subscribers can watch
       </p>
     </div>
   );

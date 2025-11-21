@@ -15,10 +15,10 @@ export const SUI_CHAIN = SUI_CONFIG.CHAIN;
 export const SUI_CLOCK = SUI_CONFIG.CLOCK_ID;
 export const MIST_PER_SUI = SUI_CONFIG.MIST_PER_SUI;
 
-// Contract addresses - Testnet deployment
-export const PACKAGE_ID = '0x186f53bf9b5d5364261ce462a19ee0f8b0be2b6a3756dba4bee7ef14c5f674eb';
-export const IDENTITY_REGISTRY_ID = '0x2ba780a065cf23a76a6eff837b434f1b59230b975c57e1ecaab98c9ad991dcd9';
-export const SPACE_REGISTRY_ID = '0xeef22b14e389bb6dc664e7d71293fbd2301a3acf8e46542db8f3f4ac46c602e2';
-export const FAN_REGISTRY_ID = '0x33222a2d9b494e6983f478edcb450d305fd06a2cfae79a197d425353a5a08ca6';
-export const SUBSCRIPTION_REGISTRY_ID = '0x7ff6ffbac3baf74b438a2a68c0c8bdb4e842ef568daeb2a79976043c5a416478';
+// Contract addresses - Testnet deployment (Fixed kiosk creation bug)
+export const PACKAGE_ID = '0xb0d9bd004530fa892b4c81962a147c40acf72922e51f9553230436d139252f78';
+export const IDENTITY_REGISTRY_ID = '0xd510be674fcbf7b8562a6ef4f0cfc05270a58a28c20777003ee1fbebb42b0902';
+export const SPACE_REGISTRY_ID = '0x9634d442d929cd082406c78ba64a24a5d81bc807e8fd4d22fc054b4fe226a2ef';
+export const FAN_REGISTRY_ID = '0x4b75f4d63aafc14879d398ca007e6c7abf1dbf9949846b3806356d55f9fa9bd9';
+export const SUBSCRIPTION_REGISTRY_ID = '0x382d03c8d0da7ee53b2b37f41ae2f5efb31dfaeef75e94d4e1ad4bc7d9723bf0';
 

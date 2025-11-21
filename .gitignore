@@ -49,3 +49,6 @@ pnpm-lock.yaml
 generate_test_glb.py
 frontend/public/test-*.glb
 
+# Seal test directory
+seal_test/
+

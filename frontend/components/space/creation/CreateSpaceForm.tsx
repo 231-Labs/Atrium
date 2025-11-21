@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { RetroPanel } from "@/components/common/RetroPanel";
 import { RetroButton } from "@/components/common/RetroButton";
-import { SpaceCategory } from "@/components/space/SpaceCategoryFilter";
-import { uploadToWalrus } from "@/services/walrusApi";
+import { SpaceCategory } from "../ui";
+import { uploadBlobToWalrus } from "@/services/walrusApi";
 import { initializeSpace, MIST_PER_SUI, SUI_CHAIN } from "@/utils/transactions";
 import { PACKAGE_ID } from "@/config/sui";
 
@@ -78,7 +78,7 @@ export function CreateSpaceForm({ onClose, onCreated }: CreateSpaceFormProps) {
       // Upload cover image to Walrus
       let coverImageBlobId = "";
       if (formData.coverImage) {
-        coverImageBlobId = await uploadToWalrus(formData.coverImage);
+        coverImageBlobId = await uploadBlobToWalrus(formData.coverImage);
       }
 
       // Create empty 3D config
@@ -97,7 +97,7 @@ export function CreateSpaceForm({ onClose, onCreated }: CreateSpaceFormProps) {
       const configBlob = new Blob([JSON.stringify(emptyConfig)], {
         type: "application/json",
       });
-      const configQuilt = await uploadToWalrus(configBlob);
+      const configQuilt = await uploadBlobToWalrus(configBlob);
 
       // Default to free subscription
       const subscriptionPriceInMist = 0;
@@ -119,21 +119,43 @@ export function CreateSpaceForm({ onClose, onCreated }: CreateSpaceFormProps) {
           chain: SUI_CHAIN,
         },
         {
-          onSuccess: () => {
+          onSuccess: (result) => {
+            console.log('✅ Space created successfully:', result);
+            setLoading(false);
             handleClose();
+            
+            // Dispatch global event for space creation
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('atrium-space-created', { 
+                detail: { result } 
+              }));
+            }
+            
+            // Call onCreated callback after successful transaction
             onCreated?.();
           },
           onError: (error) => {
-            console.error("Failed to create space:", error);
-            alert(`Creation failed: ${error.message}`);
+            console.error("❌ Failed to create space:", error);
+            setLoading(false);
+            
+            // Extract detailed error message
+            let errorMsg = 'Unknown error';
+            if (error instanceof Error) {
+              errorMsg = error.message;
+            } else if (typeof error === 'string') {
+              errorMsg = error;
+            } else if (error && typeof error === 'object') {
+              errorMsg = JSON.stringify(error, null, 2);
+            }
+            
+            alert(`Space creation failed:\n\n${errorMsg}\n\nPlease check:\n- Gas balance (need ~0.15 SUI)\n- Network connection\n- Console for details`);
           },
         }
       );
     } catch (error: any) {
-      console.error("Error:", error);
-      alert(`Error: ${error.message}`);
-    } finally {
+      console.error("❌ Error during space creation:", error);
       setLoading(false);
+      alert(`Error: ${error.message || error}\n\nCheck console for details.`);
     }
   };
 

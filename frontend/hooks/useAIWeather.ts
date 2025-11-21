@@ -144,11 +144,9 @@ export function useAIWeather(options: UseAIWeatherOptions = {}) {
       console.log('✅ AI weather updated successfully', {
         weatherType: weatherParams.weatherType,
         mood: weatherParams.mood,
-        cached: data.cached,
-        fishCount: weatherParams.fishCount,
-        floatingOrbCount: weatherParams.floatingOrbCount,
-        energyBeamIntensity: weatherParams.energyBeamIntensity,
+        skyColor: weatherParams.skyColor, // Added log for sky color
         reasoning: weatherParams.reasoning,
+        cached: data.cached,
       });
 
     } catch (error) {

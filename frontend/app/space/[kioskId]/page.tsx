@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useSpace } from "@/hooks/useSpace";
-import { SpaceDetail } from "@/components/space/SpaceDetail";
+import { SpaceDetail } from "@/components/space/display";
 import { RetroPanel } from "@/components/common/RetroPanel";
 import { RetroButton } from "@/components/common/RetroButton";
 

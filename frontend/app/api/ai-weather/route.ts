@@ -10,7 +10,8 @@ import { getTimeFactors } from '@/services/timeFactors';
 import type { SceneWeatherParams } from '@/services/poeApi';
 
 // Cache config
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+// Reduced cache duration for debugging (was 5 * 60 * 1000)
+const CACHE_DURATION = 10 * 1000; // 10 seconds
 let cachedWeatherData: {
   data: SceneWeatherParams;
   timestamp: number;
@@ -53,9 +54,9 @@ export async function GET(request: NextRequest) {
 
     lastRequestTime = now;
 
-    // 3. Get chain data
-    console.log('🔍 Fetching fresh crypto data...');
-    const chainData = await chainDataApi.getChainDataSnapshot(true);
+    // 3. Get chain data (use cache if available)
+    console.log('🔍 Fetching crypto data...');
+    const chainData = await chainDataApi.getChainDataSnapshot(false);
 
     // 4. Call POE API (if configured)
     const POE_API_KEY = process.env.POE_API_KEY || process.env.NEXT_PUBLIC_POE_API_KEY;
@@ -227,10 +228,10 @@ function generateFallbackWeather(chainData: any): SceneWeatherParams {
   } else if (change > -5) {
     weatherType = 'rainy';
     mood = 'melancholic';
-    skyColor = '#708090'; // Slate Gray
+    skyColor = '#556B7A'; // 稍微調亮的冷灰藍色，保持陰冷但不過暗
     specialEvents = ['shooting_star'];
     waterEffect = 'waves';
-    waterColor = '#4682B4';
+    waterColor = '#3B4F5E'; // 稍微調亮的深藍灰色
     ambientEffects = ['dust_particles'];
   } else {
     weatherType = 'stormy';
@@ -245,15 +246,40 @@ function generateFallbackWeather(chainData: any): SceneWeatherParams {
   
   console.log(`🐟 Fallback: Creating ${fishCount} fish from $${totalVolume.toFixed(1)}B volume, ${floatingOrbCount} orbs, ${energyBeamIntensity.toFixed(2)} beam intensity`);
   
+  // Weather-specific adjustments for atmosphere
+  let fogDensity = Math.min(0.8, volatility / 15);
+  let fogColor = '#CCCCCC';
+  let sunIntensity = change > 0 ? 1.5 : 0.8;
+  let sunColor = '#FFE4B5';
+  let ambientIntensity = 0.5;
+  let particleIntensity = Math.min(1, Math.abs(change) / 20);
+  
+  // Apply weather-specific overrides for stronger atmosphere
+  if (weatherType === 'rainy' || weatherType === 'stormy') {
+    // Rainy/Stormy: Cold, but slightly brighter for visibility
+    fogDensity = Math.max(0.4, Math.min(0.75, volatility / 12)); // 稍微降低霧密度
+    fogColor = weatherType === 'rainy' ? '#5A6B7A' : '#3D4854'; // 稍微調亮的冷灰色霧
+    sunIntensity = weatherType === 'rainy' ? 0.55 : 0.3; // 提高一點光照（從 0.4 到 0.55）
+    sunColor = '#9AABB8'; // 稍微亮一點的冷色光
+    ambientIntensity = weatherType === 'rainy' ? 0.4 : 0.3; // 提高環境光（從 0.3 到 0.4）
+    particleIntensity = Math.max(0.5, Math.min(1, Math.abs(change) / 15)); // More rain particles
+  } else if (weatherType === 'foggy') {
+    // Foggy: Dense, mysterious
+    fogDensity = Math.max(0.6, Math.min(0.9, volatility / 10));
+    fogColor = '#B0BEC5';
+    sunIntensity = 0.5;
+    ambientIntensity = 0.35;
+  }
+  
   return {
     skyColor,
-    fogDensity: Math.min(0.8, volatility / 15),
-    fogColor: '#CCCCCC',
-    sunIntensity: change > 0 ? 1.5 : 0.8,
-    sunColor: '#FFE4B5',
-    ambientIntensity: 0.5,
+    fogDensity,
+    fogColor,
+    sunIntensity,
+    sunColor,
+    ambientIntensity,
     weatherType,
-    particleIntensity: Math.min(1, Math.abs(change) / 20),
+    particleIntensity,
     windSpeed: Math.min(10, volatility),
     cloudSpeed: Math.min(5, volatility / 2),
     mood,

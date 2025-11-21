@@ -4,7 +4,6 @@ export class WalrusApiService {
   private currentPublisherIndex: number;
 
   constructor() {
-    // 從環境變數讀取 publisher 列表
     const envPublishers = process.env.NEXT_PUBLIC_WALRUS_PUBLISHERS;
     this.publisherUrls = envPublishers 
       ? envPublishers.split(',').map(url => url.trim())
@@ -13,7 +12,6 @@ export class WalrusApiService {
           'https://publisher.testnet.walrus.atalma.io'
         ];
 
-    // 確保所有 URL 都是有效的
     this.publisherUrls = this.publisherUrls.filter(url => {
       try {
         new URL(url);
@@ -40,7 +38,6 @@ export class WalrusApiService {
     return publisher;
   }
 
-  // 上傳 blob，添加品質相關的 headers
   async uploadBlob(fileBuffer: Buffer, epochs: string = '50', retryCount: number = 0): Promise<any> {
     if (retryCount >= this.publisherUrls.length) {
       throw new Error('All publishers failed to respond');
@@ -90,7 +87,6 @@ export class WalrusApiService {
     }
   }
 
-  // 讀取 blob，添加品質相關的參數
   async readBlob(blobId: string) {
     if (!this.aggregatorUrl) {
       throw new Error('Aggregator URL is not configured');
@@ -114,7 +110,6 @@ export class WalrusApiService {
     return response;
   }
 
-  // 處理文件上傳
   async handleFileUpload(formData: FormData, method: 'PUT' | 'POST' = 'POST') {
     try {
       const file = formData.get('data') || formData.get('file');
@@ -149,22 +144,80 @@ export class WalrusApiService {
 
 export const walrusApi = new WalrusApiService();
 
+export interface WalrusUploadResponse {
+  blobId: string;
+  objectId?: string;
+  storage?: {
+    id: string;
+    startEpoch: number;
+    endEpoch: number;
+    storageSize: number;
+  };
+  registeredEpoch?: number;
+  encodedLength?: number;
+  cost?: number;
+  rawResponse: any;
+}
+
 /**
  * Convenient helper function to upload a file or blob to Walrus
  * @param file - File or Blob to upload
  * @param epochs - Number of epochs to store (default: 50)
- * @returns Blob ID string
+ * @returns Walrus upload response with metadata
  */
-export async function uploadToWalrus(file: File | Blob, epochs: string = '50'): Promise<string> {
+export async function uploadToWalrus(file: File | Blob, epochs: string = '50'): Promise<WalrusUploadResponse> {
   const fileBuffer = Buffer.from(await file.arrayBuffer());
   const result = await walrusApi.uploadBlob(fileBuffer, epochs);
   
-  // Extract blob ID from response
-  if (result.newlyCreated?.blobObject?.blobId) {
-    return result.newlyCreated.blobObject.blobId;
-  } else if (result.alreadyCertified?.blobId) {
-    return result.alreadyCertified.blobId;
+  console.log('Walrus upload result:', result);
+  console.log('Full result structure:', JSON.stringify(result, null, 2));
+  
+  // Extract metadata from response
+  let response: WalrusUploadResponse;
+  
+  if (result.newlyCreated) {
+    const blobObject = result.newlyCreated.blobObject;
+    console.log('Extracting from newlyCreated.blobObject:', blobObject);
+    console.log('Object ID:', blobObject.id);
+    
+    response = {
+      blobId: blobObject.blobId,
+      objectId: blobObject.id,
+      storage: blobObject.storage ? {
+        id: blobObject.storage.id,
+        startEpoch: blobObject.storage.startEpoch,
+        endEpoch: blobObject.storage.endEpoch,
+        storageSize: blobObject.storage.storageSize,
+      } : undefined,
+      registeredEpoch: result.newlyCreated.blobObject.registeredEpoch,
+      encodedLength: result.newlyCreated.encodedLength,
+      cost: result.cost,
+      rawResponse: result,
+    };
+  } else if (result.alreadyCertified) {
+    response = {
+      blobId: result.alreadyCertified.blobId,
+      objectId: result.alreadyCertified.blobObject?.id,
+      registeredEpoch: result.alreadyCertified.blobObject?.registeredEpoch,
+      encodedLength: result.alreadyCertified.encodedLength,
+      cost: result.cost,
+      rawResponse: result,
+    };
   } else {
     throw new Error('Failed to get blob ID from Walrus response');
   }
-} 
+  
+  return response;
+}
+
+/**
+ * Simplified upload function - returns only the blob ID
+ * Use this for simple cases where you only need the blob ID
+ * @param file - File or Blob to upload
+ * @param epochs - Number of epochs to store (default: 50)
+ * @returns Blob ID string
+ */
+export async function uploadBlobToWalrus(file: File | Blob, epochs: string = '50'): Promise<string> {
+  const response = await uploadToWalrus(file, epochs);
+  return response.blobId;
+}

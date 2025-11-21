@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useCurrentAccount, useSignAndExecuteTransaction, useDisconnectWallet } from "@mysten/dapp-kit";
-import { uploadToWalrus } from "@/services/walrusApi";
+import { uploadBlobToWalrus } from "@/services/walrusApi";
 import { mintIdentity } from "@/utils/transactions";
 import { RetroButton } from "@/components/common/RetroButton";
 import { RetroInput } from "@/components/common/RetroInput";
@@ -75,20 +75,26 @@ export function IdentityRegistration({ onComplete }: IdentityRegistrationProps) 
       
       // 1. Upload 3D Avatar
       setProgress("Uploading 3D Avatar to Walrus...");
-      const avatarBlobId = await uploadToWalrus(avatarFile);
+      const avatarBlobId = await uploadBlobToWalrus(avatarFile);
 
       // 2. Upload Profile Image (Optional)
       let imageBlobId = "";
       if (profileImage) {
         setProgress("Uploading Profile Picture to Walrus...");
-        imageBlobId = await uploadToWalrus(profileImage);
+        imageBlobId = await uploadBlobToWalrus(profileImage);
       }
 
       // 3. Mint Identity
       setStep("minting");
       setProgress("Minting your Atrium Identity...");
 
-      const tx = mintIdentity(username, bio, avatarBlobId, imageBlobId);
+      const tx = mintIdentity(
+        username, 
+        bio, 
+        avatarBlobId, 
+        imageBlobId,
+        currentAccount.address  // Recipient address for PTB
+      );
 
       signAndExecute(
         {

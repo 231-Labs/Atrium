@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
 import { useUserSpaces } from '@/hooks/useUserSpaces';
 import { RetroPanel } from '@/components/common/RetroPanel';
@@ -8,25 +8,43 @@ import { RetroButton } from '@/components/common/RetroButton';
 import { RetroHeading } from '@/components/common/RetroHeading';
 import { ThreeScene } from '@/components/3d/ThreeScene';
 import { RetroFrameCanvas } from '@/components/3d/RetroFrameCanvas';
-import { CreateSpaceForm } from '@/components/space/CreateSpaceForm';
-import { NFTListPanel } from '@/components/space/NFTListPanel';
-import { ContentManager } from '@/components/space/ContentManager';
-import { ScreenConfig } from '@/components/space/ScreenConfig';
-import { LandingPageView } from '@/components/space/LandingPageView';
+import { CreateSpaceForm, ScreenConfig } from '../creation';
+import { NFTListPanel } from '../nft';
+import { ContentManager, ContentUploadWindow } from '../content';
+import { LandingPageView } from './LandingPageView';
 import { ExplorerLink } from '@/components/common/ExplorerLink';
 import { useRouter } from 'next/navigation';
 import { UserSpaceData } from '@/hooks/useUserSpaces';
 import { useSpaceEditor } from '@/hooks/useSpaceEditor';
 import { useSpace } from '@/hooks/useSpace';
+import { useKioskManagement } from '@/hooks/useKioskManagement';
 import { serializeConfig, uploadConfigToWalrus, SpaceScreenConfig } from '@/utils/spaceConfig';
 import { updateSpaceConfig, SUI_CHAIN } from '@/utils/transactions';
 import { ObjectTransform } from '@/types/spaceEditor';
+import { Model3DItem } from '@/types/three';
+import { getWalrusBlobUrl } from '@/config/walrus';
+import { useSpaceContents } from '@/hooks/useSpaceContents';
+import { useWindowManager } from '@/components/features/window-manager';
+import Window from '@/components/features/window-manager/components/Window';
+import { VideoWindow } from '@/components/windows/VideoWindow';
+import { EssayWindow } from '@/components/windows/EssayWindow';
 
 export function SpacePreviewWindow() {
   const currentAccount = useCurrentAccount();
   const router = useRouter();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const { spaces: userSpaces, loading, refetch } = useUserSpaces();
+  
+  // Window Manager
+  const {
+    windows,
+    activeWindowId,
+    openWindow,
+    closeWindow,
+    activateWindow,
+    startDragging,
+    resizeWindow,
+  } = useWindowManager();
   
   const [selectedSpace, setSelectedSpace] = useState<UserSpaceData | null>(
     userSpaces.length > 0 ? userSpaces[0] : null
@@ -36,10 +54,25 @@ export function SpacePreviewWindow() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [activeEditTab, setActiveEditTab] = useState<'nfts' | 'content' | 'screen'>('nfts');
-  const [viewMode, setViewMode] = useState<'3d' | 'landing'>('3d');
+  const [viewMode, setViewMode] = useState<'3d' | 'landing'>('landing');
+  const [showUploadWindow, setShowUploadWindow] = useState(false);
   
-  const [visibleNFTs, setVisibleNFTs] = useState<Set<string>>(new Set());
-  const [objectTransforms, setObjectTransforms] = useState<Map<string, ObjectTransform>>(new Map());
+  // Load real content data
+  const { contents: spaceContents } = useSpaceContents(selectedSpace?.spaceId || null);
+  const contentItems = spaceContents
+    .filter(c => c.type !== 'image') // ContentItemData doesn't support 'image' type
+    .map(c => ({
+      id: c.id,
+      title: c.title,
+      description: c.description,
+      type: c.type as 'video' | 'essay' | 'merch',
+      blobId: c.blobId,
+      isLocked: c.encrypted,
+      price: c.price,
+      sealResourceId: c.sealResourceId, // Pass Seal resourceId for decryption
+    }));
+  
+  // Derived states from editorState are calculated below
   const [screenConfig, setScreenConfig] = useState<SpaceScreenConfig>({ 
     contentType: 'none', 
     blobId: '', 
@@ -48,13 +81,40 @@ export function SpacePreviewWindow() {
 
   const { space: spaceDetail } = useSpace(selectedSpace?.spaceId || null);
   
+  const [editingNFTId, setEditingNFTId] = useState<string | null>(null);
+
   const {
     state: editorState,
     toggleObjectVisibility,
     updateObjectScale,
     updateObjectTransform,
     getAllObjects,
+    addObject,
+    setObjects,
   } = useSpaceEditor();
+
+  // Derived states for UI compatibility
+  const objectTransforms = useMemo(() => {
+    const map = new Map<string, ObjectTransform>();
+    editorState.objects.forEach((obj) => {
+      map.set(obj.id, obj.transform);
+    });
+    return map;
+  }, [editorState.objects]);
+
+  const visibleNFTs = useMemo(() => {
+    const set = new Set<string>();
+    editorState.objects.forEach((obj) => {
+      if (obj.visible) set.add(obj.id);
+    });
+    return set;
+  }, [editorState.objects]);
+
+  // Get NFT list from Kiosk
+  const { nfts } = useKioskManagement({
+    kioskId: spaceDetail?.marketplaceKioskId || null,
+    enabled: !!spaceDetail?.marketplaceKioskId && isEditMode,
+  });
 
   React.useEffect(() => {
     if (userSpaces.length > 0 && !selectedSpace) {
@@ -62,13 +122,23 @@ export function SpacePreviewWindow() {
     }
   }, [userSpaces, selectedSpace]);
 
+  // Auto-switch to content tab when in landing mode and current tab is not available
+  React.useEffect(() => {
+    if (viewMode === 'landing' && (activeEditTab === 'nfts' || activeEditTab === 'screen')) {
+      setActiveEditTab('content');
+    }
+  }, [viewMode, activeEditTab]);
+
   const handleCreateSpace = () => {
     setIsCreatingSpace(true);
   };
 
-  const handleSpaceCreated = () => {
+  const handleSpaceCreated = async () => {
     setIsCreatingSpace(false);
-    refetch();
+    // Wait for blockchain to finalize the transaction before refetching
+    setTimeout(() => {
+      refetch();
+    }, 1500);
   };
 
   const handleCancelCreate = () => {
@@ -84,14 +154,64 @@ export function SpacePreviewWindow() {
   const handleSelectSpace = (space: UserSpaceData) => {
     setSelectedSpace(space);
     setIsEditMode(false);
-    setVisibleNFTs(new Set());
-    setObjectTransforms(new Map());
+    setObjects([]); 
+    setEditingNFTId(null);
   };
 
   const handleToggleEditMode = () => {
     setIsEditMode(!isEditMode);
     if (!isEditMode) {
       setActiveEditTab('nfts');
+    } else {
+      setEditingNFTId(null);
+    }
+  };
+
+  const handleViewContent = (itemId: string) => {
+    const content = spaceContents.find(c => c.id === itemId);
+    if (!content) {
+      console.error('Content not found:', itemId);
+      return;
+    }
+
+    const spaceId = selectedSpace?.spaceId || '';
+    
+    console.log('🔍 [SpacePreviewWindow] Opening content window:', {
+      contentId: content.id,
+      contentType: content.type,
+      blobId: content.blobId,
+      spaceId,
+      spaceIdFromSpace: selectedSpace?.spaceId,
+      selectedSpaceName: selectedSpace?.name,
+    });
+    
+    if (!spaceId || spaceId === '') {
+      alert('Cannot open content: Space ID is missing');
+      return;
+    }
+
+    // Open appropriate window based on content type
+    // Seal encryption ID will be automatically extracted from the encrypted blob
+    if (content.type === 'video') {
+      openWindow('video-player', {
+        title: content.title,
+        data: {
+          blobId: content.blobId,
+          spaceId: spaceId,
+          title: content.title,
+          isLocked: content.encrypted || false,
+        }
+      });
+    } else if (content.type === 'essay') {
+      openWindow('essay-reader', {
+        title: content.title,
+        data: {
+          blobId: content.blobId,
+          spaceId: spaceId,
+          title: content.title,
+          isLocked: content.encrypted || false,
+        }
+      });
     }
   };
 
@@ -132,27 +252,72 @@ export function SpacePreviewWindow() {
   };
 
   const handleNFTVisibilityToggle = (nftId: string) => {
-    setVisibleNFTs(prev => {
-      const next = new Set(prev);
-      if (next.has(nftId)) {
-        next.delete(nftId);
-      } else {
-        next.add(nftId);
+    const existingObject = editorState.objects.get(nftId);
+
+    // 如果是首次顯示，將 NFT 添加到 editor state
+    if (!existingObject) {
+      const nft = nfts.find(n => n.id === nftId);
+      if (nft) {
+        addObject({
+          id: nftId,
+          nftId: nftId,
+          objectType: nft.objectType,
+          name: nft.name,
+          thumbnail: nft.imageUrl,
+          transform: {
+            position: [0, 1, 0],
+            rotation: [0, 0, 0],
+            scale: 1,
+          },
+          visible: true,
+        });
       }
-      return next;
-    });
-    toggleObjectVisibility(nftId);
+    } else {
+      toggleObjectVisibility(nftId);
+    }
   };
 
   const handleNFTScaleChange = (nftId: string, scale: number) => {
     updateObjectScale(nftId, scale);
-    setObjectTransforms(prev => {
-      const next = new Map(prev);
-      const current = next.get(nftId) || { position: [0, 0, 0], rotation: [0, 0, 0], scale: 1 };
-      next.set(nftId, { ...current, scale });
-      return next;
-    });
   };
+
+  const handleNFTTransformChange = (nftId: string, transform: ObjectTransform) => {
+    updateObjectTransform(nftId, transform);
+  };
+
+  // Convert visible NFTs to 3D model list
+  const visibleModels = useMemo<Model3DItem[]>(() => {
+    // 只顯示已添加到 editor state 且 visible 為 true 的 3D 物件
+    return Array.from(editorState.objects.values())
+      .filter(obj => obj.visible)
+      .map((obj): Model3DItem | null => {
+        const nft = nfts.find(n => n.id === obj.id);
+        // 確保該物件是 3D 類型 (這裡的檢查依賴 nfts 列表或 obj 自身的數據)
+        if (!nft || nft.objectType !== '3d') return null;
+
+        return {
+          id: obj.id,
+          name: obj.name,
+          modelUrl: nft.glbFile ? getWalrusBlobUrl(nft.glbFile) : '', // Use full Walrus URL
+          position: {
+            x: obj.transform.position[0],
+            y: obj.transform.position[1],
+            z: obj.transform.position[2],
+          },
+          rotation: {
+            x: obj.transform.rotation[0],
+            y: obj.transform.rotation[1],
+            z: obj.transform.rotation[2],
+          },
+          scale: {
+            x: obj.transform.scale,
+            y: obj.transform.scale,
+            z: obj.transform.scale,
+          },
+        };
+      })
+      .filter((item): item is Model3DItem => item !== null);
+  }, [editorState.objects, nfts]);
 
   if (loading) {
     return (
@@ -295,12 +460,19 @@ export function SpacePreviewWindow() {
         )}
 
         {/* Left Sidebar Area (Shared for Spaces List and Edit Tools) */}
-        <div className={`${isEditMode ? 'w-full md:w-80' : 'hidden md:flex w-80'} flex-shrink-0 border-r border-gray-200 flex flex-col bg-white`}>
+        <div 
+          className={`
+            flex-shrink-0 border-r border-gray-200 flex flex-col bg-white transition-all duration-300 ease-in-out
+            ${isEditMode 
+              ? 'fixed bottom-0 left-0 right-0 h-[45vh] md:static md:h-auto md:w-80 z-30 border-t md:border-t-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] md:shadow-none' 
+              : 'hidden md:flex md:w-80'}
+          `}
+        >
           {isEditMode ? (
             // Edit Tools Sidebar
             <div className="flex-1 flex flex-col min-h-0">
                {/* Edit Mode Header with Done Button */}
-               <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-gray-50">
+               <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-gray-50 shrink-0">
                  <span className="text-xs font-medium uppercase tracking-wider text-gray-600" style={{ fontFamily: 'Georgia, serif' }}>
                    Editing Tools
                  </span>
@@ -309,12 +481,19 @@ export function SpacePreviewWindow() {
                  </RetroButton>
                </div>
 
-              <div className="flex border-b border-gray-200">
+              <div className="flex border-b border-gray-200 shrink-0">
                 {[
                   { id: 'nfts', label: 'NFTs' },
                   { id: 'content', label: 'Content' },
                   { id: 'screen', label: 'Screen' },
-                ].map(tab => (
+                ].filter(tab => {
+                  // In landing mode, only show Content tab
+                  if (viewMode === 'landing') {
+                    return tab.id === 'content';
+                  }
+                  // In 3D mode, show all tabs
+                  return true;
+                }).map(tab => (
                   <button
                     key={tab.id}
                     onClick={() => setActiveEditTab(tab.id as any)}
@@ -330,7 +509,7 @@ export function SpacePreviewWindow() {
                 ))}
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex-1 overflow-y-auto p-4 bg-white">
                 {activeEditTab === 'nfts' && (
                   <>
                     {spaceDetail && spaceDetail.marketplaceKioskId ? (
@@ -338,8 +517,11 @@ export function SpacePreviewWindow() {
                         kioskId={spaceDetail.marketplaceKioskId}
                         visibleNFTs={visibleNFTs}
                         objectTransforms={objectTransforms}
+                        selectedNFTId={editingNFTId}
                         onToggleVisibility={handleNFTVisibilityToggle}
                         onScaleChange={handleNFTScaleChange}
+                        onTransformChange={handleNFTTransformChange}
+                        onSelect={(id) => setEditingNFTId(id === editingNFTId ? null : id)}
                         onList={() => {}}
                         onDelist={() => {}}
                       />
@@ -352,7 +534,10 @@ export function SpacePreviewWindow() {
                   </>
                 )}
                 {activeEditTab === 'content' && selectedSpace && (
-                  <ContentManager spaceId={selectedSpace.spaceId} />
+                  <ContentManager 
+                    spaceId={selectedSpace.spaceId}
+                    ownershipId={selectedSpace.ownershipId}
+                  />
                 )}
                 {activeEditTab === 'screen' && (
                   <ScreenConfig
@@ -363,7 +548,7 @@ export function SpacePreviewWindow() {
                 )}
               </div>
 
-              <div className="p-3 border-t border-gray-200">
+              <div className="p-3 border-t border-gray-200 bg-gray-50 shrink-0 pb-6 md:pb-3">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs text-gray-500" style={{ fontFamily: 'Georgia, serif' }}>
                     {editorState.pendingChanges ? '• Unsaved changes' : 'All saved'}
@@ -460,29 +645,33 @@ export function SpacePreviewWindow() {
           {isCreatingSpace ? (
             <CreateSpaceForm onClose={handleCancelCreate} onCreated={handleSpaceCreated} />
           ) : selectedSpace ? (
-            <div className={`flex-1 relative flex flex-col ${isEditMode ? 'hidden md:flex' : 'flex'}`}>
+            <div className="flex-1 relative flex flex-col min-h-0 overflow-hidden">
               {viewMode === '3d' ? (
                 <RetroFrameCanvas className="flex-1 w-full h-full">
                   <ThreeScene 
                     spaceId={selectedSpace.spaceId} 
+                    models={visibleModels}
                     enableGallery={true} 
                     isPreview={true}
                   />
                 </RetroFrameCanvas>
               ) : (
-                /* Landing Page View */
-                <LandingPageView 
-                  space={selectedSpace}
-                  contentItems={[]} // Placeholder for now
-                  isSubscribed={true} // Creator is always subscribed
-                  isCreator={true}
-                  onUnlock={() => {}}
-                  onView={() => {}}
-                  onUpload={() => {
-                    setIsEditMode(true);
-                    setActiveEditTab('content');
-                  }}
-                />
+                /* Landing Page View - needs flex-1 to take full height */
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <LandingPageView 
+                    space={selectedSpace}
+                    contentItems={contentItems}
+                    isSubscribed={true} // Creator is always subscribed
+                    isCreator={true}
+                    onUnlock={() => {}}
+                    onView={handleViewContent}
+                    onUpload={() => {
+                      setShowUploadWindow(true);
+                      setIsEditMode(true);
+                      setActiveEditTab('content');
+                    }}
+                  />
+                </div>
               )}
               
               {/* Overlays */}
@@ -518,6 +707,70 @@ export function SpacePreviewWindow() {
           )}
         </div>
       </div>
+
+      {/* Content Upload Window */}
+      {selectedSpace && (
+        <>
+          <ContentUploadWindow
+            isOpen={showUploadWindow}
+            onClose={() => setShowUploadWindow(false)}
+            spaceId={selectedSpace.spaceId}
+            ownershipId={selectedSpace.ownershipId}
+            onUploadComplete={(content) => {
+              console.log("Upload complete:", content);
+              setShowUploadWindow(false);
+              // Content is automatically saved to localStorage in ContentUploadWindow
+              // ContentManager will auto-reload from localStorage
+            }}
+          />
+        </>
+      )}
+
+      {/* Floating Windows for Content Viewing */}
+      {Object.values(windows).map((win) => {
+        let content = null;
+        
+        if (win.type === 'video-player' && win.data) {
+          content = (
+            <VideoWindow
+              blobId={win.data.blobId}
+              resourceId={win.data.resourceId}
+              title={win.data.title}
+              isLocked={win.data.isLocked}
+            />
+          );
+        } else if (win.type === 'essay-reader' && win.data) {
+          content = (
+            <EssayWindow
+              blobId={win.data.blobId}
+              spaceId={win.data.spaceId}
+              title={win.data.title}
+              isLocked={win.data.isLocked}
+            />
+          );
+        }
+
+        if (!content) return null;
+
+        return (
+          <Window
+            key={win.id}
+            id={win.id}
+            title={win.title}
+            position={win.position}
+            size={win.size}
+            isActive={win.id === activeWindowId}
+            zIndex={win.zIndex}
+            onClose={closeWindow}
+            onDragStart={startDragging}
+            onResize={resizeWindow}
+            onClick={() => activateWindow(win.id)}
+            resizable={win.resizable}
+          >
+            {content}
+          </Window>
+        );
+      })}
     </RetroPanel>
   );
 }

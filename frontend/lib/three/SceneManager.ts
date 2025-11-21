@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { AtriumGalleryScene, AtriumGallerySceneConfig } from './AtriumGalleryScene';
 import { ThreeSceneConfig, LoadGLBOptions } from '../../types/three';
 
@@ -16,7 +17,9 @@ export class SceneManager {
   private galleryScene?: AtriumGalleryScene;
   private dracoLoader: DRACOLoader;
   private clock: THREE.Clock;
-  private transformControls?: any;
+  private transformControls?: TransformControls;
+  private onDraggingChanged?: (isDragging: boolean) => void;
+  private onTransformChange?: () => void;
   
   // Animation state
   private introAnimation: {
@@ -77,6 +80,41 @@ export class SceneManager {
     this.controls.maxDistance = 60; // Increased for intro view
     this.controls.maxPolarAngle = Math.PI / 2.2; // Slight constraint to maintain architectural feel
     this.controls.update(); // Apply initial target
+
+    // Setup transform controls for object manipulation
+    this.transformControls = new TransformControls(this.camera, this.renderer.domElement);
+    this.transformControls.setMode('translate');
+    this.transformControls.setSpace('world');
+    // TransformControls extends Object3D, so we can add it directly
+    // Fix: Manually set isObject3D to true to bypass version mismatch issues
+    // if (!(this.transformControls as any).isObject3D) {
+    //   (this.transformControls as any).isObject3D = true;
+    // }
+    
+    // Fix: Ensure removeFromParent exists (it might be missing in some contexts/versions)
+    // if (typeof (this.transformControls as any).removeFromParent !== 'function') {
+    //   (this.transformControls as any).removeFromParent = function() {
+    //     if (this.parent) {
+    //       this.parent.remove(this);
+    //     }
+    //   };
+    // }
+
+    this.scene.add(this.transformControls as any);
+    
+    // Disable orbit controls when dragging with transform controls
+    this.transformControls.addEventListener('dragging-changed', (event: any) => {
+      this.controls.enabled = !event.value;
+      if (this.onDraggingChanged) {
+        this.onDraggingChanged(event.value);
+      }
+    });
+
+    this.transformControls.addEventListener('change', () => {
+      if (this.onTransformChange) {
+        this.onTransformChange();
+      }
+    });
 
     // Initialize gallery scene
     if (config.galleryScene) {
@@ -337,6 +375,13 @@ export class SceneManager {
     }
 
     // Dispose Three.js resources
+    // Explicitly remove TransformControls before traversal to prevent errors
+    if (this.transformControls) {
+      this.scene.remove(this.transformControls as unknown as THREE.Object3D);
+      this.transformControls.dispose();
+      this.transformControls = undefined;
+    }
+
     this.scene.traverse((object) => {
       if (object instanceof THREE.Mesh) {
         object.geometry.dispose();
@@ -394,6 +439,15 @@ export class SceneManager {
     return this.galleryScene?.getVideoScreenMesh();
   }
 
+  // Set TransformControls callbacks
+  setTransformCallbacks(
+    onDraggingChanged?: (isDragging: boolean) => void,
+    onTransformChange?: () => void
+  ) {
+    this.onDraggingChanged = onDraggingChanged;
+    this.onTransformChange = onTransformChange;
+  }
+
   // Attach TransformControls to an object
   attachTransformControls(object: THREE.Object3D) {
     if (this.transformControls) {
@@ -422,6 +476,8 @@ export class SceneManager {
 
     const intersects = raycaster.intersectObjects(this.scene.children, true);
     
+    console.log('🎯 Pick attempt:', { intersects: intersects.length, normalized: { x: normalizedX, y: normalizedY } });
+    
     // Filter out TransformControls, grid, helpers, etc.
     for (const intersect of intersects) {
       let obj = intersect.object;
@@ -429,15 +485,31 @@ export class SceneManager {
       // Traverse up to find the root group if it's a model
       while (obj.parent && obj.parent !== this.scene) {
         // If we hit a special object (like TransformControls), ignore it
-        if (obj.parent.type === 'TransformControls') return null;
+        if (obj.parent.type === 'TransformControls') {
+          console.log('❌ Hit TransformControls, skipping');
+          return null;
+        }
         obj = obj.parent;
       }
 
       // Ignore grid/lights/helpers if needed
-      if (obj.type === 'GridHelper' || obj.type === 'AxesHelper' || obj.type === 'Light') continue;
+      if (obj.type === 'GridHelper' || obj.type === 'AxesHelper' || obj.type === 'Light') {
+        console.log('❌ Hit helper/light, skipping:', obj.type);
+        continue;
+      }
       
-      return obj;
+      // Check if it's a loaded model (check if it's in our loaded models Map)
+      const isLoadedModel = Array.from(this.loadedModels.values()).some(model => model === obj);
+      
+      if (isLoadedModel || obj.type === 'Group' || obj.type === 'Mesh') {
+        console.log('✅ Picked object:', { name: obj.name, type: obj.type, isLoadedModel });
+        return obj;
+      }
+      
+      console.log('⚠️ Object found but skipped:', { name: obj.name, type: obj.type });
     }
+    
+    console.log('❌ No valid object picked');
     return null;
   }
 
@@ -454,6 +526,30 @@ export class SceneManager {
       };
     });
     return models;
+  }
+
+  // Update model position
+  updateModelPosition(modelId: string, position: { x: number; y: number; z: number }) {
+    const model = this.loadedModels.get(modelId);
+    if (model) {
+      model.position.set(position.x, position.y, position.z);
+    }
+  }
+
+  // Update model rotation
+  updateModelRotation(modelId: string, rotation: { x: number; y: number; z: number }) {
+    const model = this.loadedModels.get(modelId);
+    if (model) {
+      model.rotation.set(rotation.x, rotation.y, rotation.z);
+    }
+  }
+
+  // Update model scale
+  updateModelScale(modelId: string, scale: { x: number; y: number; z: number }) {
+    const model = this.loadedModels.get(modelId);
+    if (model) {
+      model.scale.set(scale.x, scale.y, scale.z);
+    }
   }
 
   // Update weather parameters (delegates to gallery scene)

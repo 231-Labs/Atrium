@@ -61,9 +61,9 @@ export function buildSceneGenerationPrompt(
     
     if (timeFactors.timeTendency) {
       timeFactorsSection += `\n- Time of day: ${timeFactors.timeTendency.description}`;
-      timeFactorsSection += `\n  Sky color reference (not mandatory): ${timeFactors.timeTendency.skyColorModifier || 'N/A'}`;
+      timeFactorsSection += `\n  Sky color reference (OPTIONAL, ignore for bad weather): ${timeFactors.timeTendency.skyColorModifier || 'N/A'}`;
       timeFactorsSection += `\n  Mood tendency: ${timeFactors.timeTendency.moodTendency || 'N/A'}`;
-      timeFactorsSection += `\n  Note: Use the time-based color as inspiration only. Prioritize market conditions!`;
+      timeFactorsSection += `\n  ⚠️ CRITICAL: If weather is rainy/stormy/foggy, IGNORE time colors and use dark/cold colors!`;
     }
     
     if (timeFactors.weekdayEffect) {
@@ -92,8 +92,8 @@ ${timeFactorsSection}
 1. **Weather Type (weatherType)**:
    - Strong Bull (>5%): sunny
    - Mild Bull (0-5%): cloudy
-   - Mild Bear (0 to -5%): rainy
-   - Strong Bear (<-5%): stormy
+   - Mild Bear (0 to -5%): rainy (MUST use very dark, cold colors: sky #3D4451, water #2C3E50, high fog)
+   - Strong Bear (<-5%): stormy (MUST use extremely dark colors: sky #2F4F4F or darker, water #1C2841)
    - High Volatility (>8): foggy
    - Special conditions: snowy (rare, extreme cold market)
    - **OVERRIDE**: If special date event suggests specific weather, prioritize it!
@@ -109,13 +109,16 @@ ${timeFactorsSection}
    - Low (<4): Focus on ambient effects, consider time-based events to add interest
 
    4. **Colors & Lighting** (CRITICAL RULES):
-   - **Primary Rule**: ALWAYS use soft, pastel, or ethereal colors. NEVER use intense/saturated colors.
-   - Bullish: Soft warm tones (cream #FFFAF0, light peach #FFDAB9, pale gold #FFF8DC). NO bright yellow!
-   - Bearish: Cool tones (slate blue #708090, soft gray #B0C4DE, dim silver #C0C0C0). NO pure black!
+   - **Primary Rule**: Match colors to market mood - bright for bullish, darker for bearish!
+   - Bullish: Soft warm tones (cream #FFFAF0, light peach #FFDAB9). Avoid strong yellow!
+   - **Bearish (RAINY)**: Cool, moody tones! Sky: #556B7A to #4A5F6E (cool slate blue), Water: #3B4F5E, Fog: #5A6B7A
+     * sunIntensity: 0.5-0.6, ambientIntensity: 0.35-0.45, fogDensity: 0.4-0.7
+   - **Bearish (STORMY)**: Very dark! Sky: #3D4854 to #2F4F4F, Water: #2A3B47, Fog: #3D4854
+     * sunIntensity: 0.3-0.4, ambientIntensity: 0.25-0.35, fogDensity: 0.6-0.8
    - Neutral: Balanced light tones (off-white #F5F5F5, pearl gray #E8E8E8, soft azure #F0F8FF).
    - **Time-based colors are REFERENCE ONLY**: Feel free to blend market conditions with time atmosphere
-   - **Bad examples**: #FFD700 (too yellow), #F0E68C (too khaki), #FF0000 (too red), #000000 (too dark)
-   - **Good examples**: #FFFAF0 (floral white), #F5F5DC (beige), #E6E6FA (lavender), #F0F8FF (alice blue)
+   - **Bad examples for rainy/stormy**: #708090 (too bright!), #B0C4DE (way too bright!), #C0C0C0 (too light!)
+   - **Good examples for rainy**: #556B7A, #4A5F6E, #3B4F5E (moody, cool, visible)
 
 5. **Dynamic Effects**:
    - Higher volatility = stronger wind and faster clouds
@@ -307,11 +310,11 @@ export const EXAMPLE_RESPONSES = {
     timestamp: Date.now(),
   },
   bearish: {
-    skyColor: '#2F4F4F',
-    fogDensity: 0.6,
-    fogColor: '#1C1C1C',
-    sunIntensity: 0.4,
-    sunColor: '#708090',
+    skyColor: '#3D4854',
+    fogDensity: 0.65,
+    fogColor: '#3D4854',
+    sunIntensity: 0.35,
+    sunColor: '#7B8C99',
     ambientIntensity: 0.3,
     weatherType: 'stormy',
     particleIntensity: 0.8,
@@ -319,11 +322,14 @@ export const EXAMPLE_RESPONSES = {
     cloudSpeed: 4,
     mood: 'melancholic',
     waterEffect: 'turbulent',
-    waterColor: '#1C2841',
+    waterColor: '#2A3B47',
     specialEvents: ['lightning', 'fireball'],
     islandState: 'smoking',
     ambientEffects: ['embers', 'dust_particles'],
     effectIntensity: 0.9,
+    fishCount: 15,
+    floatingOrbCount: 8,
+    energyBeamIntensity: 0.3,
     reasoning: 'Severe market decline of -7.2% indicates panic and uncertainty.',
     timestamp: Date.now(),
   },
