@@ -1,18 +1,20 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useCurrentAccount } from "@mysten/dapp-kit";
-import { downloadAndDecryptContent } from "@/services/sealContent";
+import { useCurrentAccount, useSignPersonalMessage } from "@mysten/dapp-kit";
+import { downloadAndDecryptContentAsSubscriber } from "@/services/sealContent";
 
 interface VideoPlayerProps {
   blobId: string;
   resourceId: string;
   isSubscribed: boolean;
+  subscriptionId?: string;
   subscriptionProof?: any;
 }
 
-export function VideoPlayer({ blobId, resourceId, isSubscribed, subscriptionProof }: VideoPlayerProps) {
+export function VideoPlayer({ blobId, resourceId, isSubscribed, subscriptionId, subscriptionProof }: VideoPlayerProps) {
   const currentAccount = useCurrentAccount();
+  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -29,7 +31,12 @@ export function VideoPlayer({ blobId, resourceId, isSubscribed, subscriptionProo
 
   const handlePlay = async () => {
     if (!isSubscribed) {
-      setError("請先訂閱才能觀看影片");
+      setError("Please subscribe to watch the video");
+      return;
+    }
+
+    if (!subscriptionId) {
+      setError("Missing subscription ID, cannot decrypt video");
       return;
     }
 
@@ -37,15 +44,23 @@ export function VideoPlayer({ blobId, resourceId, isSubscribed, subscriptionProo
       setLoading(true);
       setError("");
 
-      // TODO: Get user address and sign function from wallet
-      // Placeholder implementation
       const userAddress = currentAccount?.address || "";
-      const signFn = async (msg: Uint8Array) => ({ signature: "" });
+      if (!userAddress) {
+        setError("Please connect your wallet");
+        return;
+      }
+
+      const signFn = async (msg: Uint8Array) => {
+        const result = await signPersonalMessage({ message: msg });
+        return { signature: result.signature };
+      };
       
       // Download and decrypt video
-      const decryptedUrl = await downloadAndDecryptContent(
+      // Parameters: blobId, spaceId, subscriptionId, userAddress, signPersonalMessage, contentType
+      const decryptedUrl = await downloadAndDecryptContentAsSubscriber(
         blobId,
-        resourceId,
+        resourceId, // spaceId
+        subscriptionId,
         userAddress,
         signFn,
         'video/mp4'
@@ -59,7 +74,7 @@ export function VideoPlayer({ blobId, resourceId, isSubscribed, subscriptionProo
       }, 100);
     } catch (err: any) {
       console.error("Failed to load video:", err);
-      setError(err.message || "載入影片失敗");
+        setError(err.message || "Failed to load video");
     } finally {
       setLoading(false);
     }
@@ -72,7 +87,7 @@ export function VideoPlayer({ blobId, resourceId, isSubscribed, subscriptionProo
           {loading ? (
             <div className="text-center">
               <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-400 border-t-white mb-4"></div>
-              <p className="text-white">解密影片中...</p>
+              <p className="text-white">Decrypting video...</p>
             </div>
           ) : error ? (
             <div className="text-center text-red-400">
@@ -81,7 +96,7 @@ export function VideoPlayer({ blobId, resourceId, isSubscribed, subscriptionProo
                 onClick={handlePlay}
                 className="px-4 py-2 bg-white text-gray-900 rounded-lg hover:bg-gray-200 transition-all"
               >
-                重試
+                Retry
               </button>
             </div>
           ) : (
@@ -90,7 +105,7 @@ export function VideoPlayer({ blobId, resourceId, isSubscribed, subscriptionProo
               disabled={!isSubscribed}
               className="px-8 py-4 bg-white text-gray-900 rounded-lg font-medium hover:bg-gray-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSubscribed ? "▶️ 播放影片" : "🔒 需要訂閱"}
+              {isSubscribed ? "▶️ Play Video" : "🔒 Subscribe"}
             </button>
           )}
         </div>
