@@ -341,6 +341,7 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
                 enableGallery={true}
                 weatherMode={weatherMode}
                 onWeatherModeChange={setWeatherMode}
+                enableSubscriberAvatars={true}
               />
             </RetroFrameCanvas>
           ) : (

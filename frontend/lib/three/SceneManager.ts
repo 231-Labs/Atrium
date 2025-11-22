@@ -85,21 +85,6 @@ export class SceneManager {
     this.transformControls = new TransformControls(this.camera, this.renderer.domElement);
     this.transformControls.setMode('translate');
     this.transformControls.setSpace('world');
-    // TransformControls extends Object3D, so we can add it directly
-    // Fix: Manually set isObject3D to true to bypass version mismatch issues
-    // if (!(this.transformControls as any).isObject3D) {
-    //   (this.transformControls as any).isObject3D = true;
-    // }
-    
-    // Fix: Ensure removeFromParent exists (it might be missing in some contexts/versions)
-    // if (typeof (this.transformControls as any).removeFromParent !== 'function') {
-    //   (this.transformControls as any).removeFromParent = function() {
-    //     if (this.parent) {
-    //       this.parent.remove(this);
-    //     }
-    //   };
-    // }
-
     this.scene.add(this.transformControls as any);
     
     // Disable orbit controls when dragging with transform controls
@@ -263,7 +248,6 @@ export class SceneManager {
           this.applyModelOptions(model, options);
           this.scene.add(model);
           this.loadedModels.set(url, model);
-          console.log(`GLB model loaded successfully: ${url}`);
           resolve(model);
         },
         (progress) => {

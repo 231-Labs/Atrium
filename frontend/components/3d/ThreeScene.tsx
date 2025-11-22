@@ -2,6 +2,7 @@
 
 import { useThreeScene } from '@/hooks/three/useThreeScene';
 import { useAIWeather } from '@/hooks/useAIWeather';
+import { useSpaceSubscribers } from '@/hooks/useSpaceSubscribers';
 import { timeFactors } from '@/services/timeFactors';
 import { Model3DItem, ThreeSceneApi } from '@/types/three';
 import { WeatherMode, STAGE_THEMES, STATIC_WEATHER_CONFIGS } from '@/types/theme';
@@ -17,6 +18,7 @@ interface ThreeSceneProps {
   weatherParams?: any;
   onWeatherModeChange?: (mode: WeatherMode) => void;
   isPreview?: boolean;
+  enableSubscriberAvatars?: boolean; // Enable subscriber avatar display
 }
 
 export const ThreeScene = forwardRef<ThreeSceneApi, ThreeSceneProps>(({ 
@@ -28,6 +30,7 @@ export const ThreeScene = forwardRef<ThreeSceneApi, ThreeSceneProps>(({
   weatherParams: externalWeatherParams,
   onWeatherModeChange,
   isPreview = false,
+  enableSubscriberAvatars = true,
 }, ref) => {
   const [internalWeatherMode, setInternalWeatherMode] = useState<WeatherMode>('dynamic');
   const weatherMode = controlledWeatherMode ?? internalWeatherMode;
@@ -87,7 +90,14 @@ export const ThreeScene = forwardRef<ThreeSceneApi, ThreeSceneProps>(({
     getSceneState,
     playIntroAnimation,
     setTransformCallbacks,
+    updateAudienceSeats,
+    getAudienceSeatPositions,
   } = useThreeScene(sceneOptions);
+
+  // Get subscriber list
+  const subscriberSpaceId = enableSubscriberAvatars && spaceId ? spaceId : null;
+  
+  const { subscribers, loading: subscribersLoading } = useSpaceSubscribers(subscriberSpaceId);
 
   // Convert loadedModels array to Map for easy lookup
   const loadedModelsMap = useMemo(() => {
@@ -138,29 +148,26 @@ export const ThreeScene = forwardRef<ThreeSceneApi, ThreeSceneProps>(({
     error: weatherError 
   } = useAIWeather({
     autoUpdate: isDynamicMode,
-    updateInterval: 5 * 60 * 1000, // 5分鐘更新一次
+    updateInterval: 5 * 60 * 1000,
     fetchOnMount: isDynamicMode && sceneInitialized,
   });
 
-  // --- Loading & Intro Logic ---
+  // Loading & Intro Logic
   const [isIntroPlayed, setIsIntroPlayed] = useState(false);
   const [showCurtain, setShowCurtain] = useState(true);
 
-  // We are ready to reveal the scene when:
+  // Ready to reveal when:
   // 1. Three.js is initialized
-  // 2. If in Dynamic Mode, we have received weather data OR we encountered an error (fallback)
+  // 2. If in Dynamic Mode, weather data received OR error (fallback)
   const readyToReveal = sceneInitialized && (isDynamicMode ? (!!apiWeatherParams || !!weatherError) : true);
 
   useEffect(() => {
     if (readyToReveal && !isIntroPlayed) {
       const play = async () => {
-        // Small delay to ensure weather visuals are applied to the scene frame
         await new Promise(r => setTimeout(r, 100));
         
-        // 1. Hide Curtain
         setShowCurtain(false);
         
-        // 2. Trigger Cinematic Camera Move
         // Use simpler/shorter animation for preview mode
         const animationConfig = isPreview ? {
           duration: 2500, 
@@ -225,16 +232,114 @@ export const ThreeScene = forwardRef<ThreeSceneApi, ThreeSceneProps>(({
     
     // Remove models that are no longer in the list
     Array.from(loadedModelsMap.keys()).forEach(modelId => {
+      // Skip internal models (like subscribers) - IMPORTANT: Prevents avatars from being removed
+      if (modelId.startsWith('subscriber-')) return;
+      
       if (!models.find(m => m.id === modelId)) {
         removeModel(modelId);
       }
     });
   }, [sceneInitialized, sceneManager, models, loadedModelsMap, loadModel, removeModel]);
 
+  // Handle subscriber avatars: place them on audience seats
+  useEffect(() => {
+    if (!sceneInitialized || !sceneManager || !enableSubscriberAvatars) {
+      return;
+    }
+    
+    if (subscribersLoading) {
+      return;
+    }
+    
+    if (subscribers.length === 0) {
+      // Cleanup old subscriber avatars
+      Array.from(loadedModelsMap.keys()).forEach(modelId => {
+        if (modelId.startsWith('subscriber-')) {
+          removeModel(modelId);
+        }
+      });
+      return;
+    }
+
+    const seatPositions = getAudienceSeatPositions();
+    if (!seatPositions || seatPositions.length === 0) {
+      return;
+    }
+
+    // Shuffle subscribers randomly
+    const shuffledSubscribers = [...subscribers].sort(() => Math.random() - 0.5);
+
+    // Limit to available seats (max 50)
+    const maxSeats = Math.min(shuffledSubscribers.length, seatPositions.length, 50);
+    const displayedSubscribers = shuffledSubscribers.slice(0, maxSeats);
+
+    // Shuffle seat positions
+    const shuffledSeats = [...seatPositions]
+      .sort(() => Math.random() - 0.5)
+      .slice(0, maxSeats);
+
+    // Check if we need to reload (subscriber list changed)
+    const currentSubscriberIds = new Set(
+      displayedSubscribers.map(s => `subscriber-${s.address}`)
+    );
+    const loadedSubscriberIds = new Set(
+      Array.from(loadedModelsMap.keys()).filter(id => id.startsWith('subscriber-'))
+    );
+
+    const idsMatch = currentSubscriberIds.size === loadedSubscriberIds.size &&
+      [...currentSubscriberIds].every(id => loadedSubscriberIds.has(id));
+    
+    if (idsMatch) {
+      return;
+    }
+
+    // Cleanup old subscriber avatars
+    Array.from(loadedModelsMap.keys()).forEach(modelId => {
+      if (modelId.startsWith('subscriber-')) {
+        removeModel(modelId);
+      }
+    });
+
+    // Load each subscriber avatar
+    displayedSubscribers.forEach((subscriber, index) => {
+      const seat = shuffledSeats[index];
+      if (!seat) return;
+
+      const subscriberModel: Model3DItem = {
+        id: `subscriber-${subscriber.address}`,
+        name: subscriber.username || `Subscriber ${subscriber.address.slice(0, 6)}`,
+        modelUrl: subscriber.avatarUrl,
+        position: {
+          x: seat.position.x,
+          y: seat.position.y,
+          z: seat.position.z,
+        },
+        rotation: {
+          x: 0,
+          y: seat.rotation,
+          z: 0,
+        },
+        scale: {
+          x: 1.0,
+          y: 1.0,
+          z: 1.0,
+        },
+      };
+
+      loadModel(subscriberModel);
+    });
+
+  }, [
+    sceneInitialized, 
+    sceneManager, 
+    enableSubscriberAvatars, 
+    subscribers, 
+    subscribersLoading,
+  ]);
+
   // Update weather when params change
   useEffect(() => {
     if (sceneInitialized && finalWeatherParams) {
-      console.log('🌤️ Applying weather to scene:', finalWeatherParams.weatherType);
       updateWeatherParams(finalWeatherParams);
     }
   }, [sceneInitialized, finalWeatherParams, updateWeatherParams]);

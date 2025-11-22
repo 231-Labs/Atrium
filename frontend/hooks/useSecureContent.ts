@@ -63,14 +63,30 @@ export function useSecureContent({
       if (!isLocked) {
         try {
           setLoading(true);
+          console.log('📥 Downloading public content from Walrus:', blobId);
           const aggregatorUrl = getWalrusAggregatorUrl();
           const res = await fetch(`${aggregatorUrl}/v1/blobs/${blobId}`);
           
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          if (!res.ok) {
+            console.error('❌ Walrus download failed:', res.status, res.statusText);
+            throw new Error(`HTTP ${res.status}`);
+          }
           
-          const data = await res.text();
-          setContent(data);
+          // Handle different content types
+          if (contentType === 'text/markdown' || contentType === 'text/plain') {
+            const data = await res.text();
+            setContent(data);
+            console.log('✅ Loaded text content');
+          } else {
+            // For binary content (video, image, etc.), create a blob URL
+            const arrayBuffer = await res.arrayBuffer();
+            const blob = new Blob([arrayBuffer], { type: contentType });
+            const blobUrl = URL.createObjectURL(blob);
+            setContent(blobUrl);
+            console.log('✅ Created blob URL for video:', blobUrl);
+          }
         } catch (e: any) {
+          console.error('❌ Failed to load public content:', e);
           setError(`Failed to load: ${e.message}`);
         } finally {
           setLoading(false);

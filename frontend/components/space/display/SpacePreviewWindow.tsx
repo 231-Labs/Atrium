@@ -169,10 +169,20 @@ export function SpacePreviewWindow() {
       return;
     }
 
+    console.log('📺 Opening content:', {
+      id: itemId,
+      type: content.type,
+      blobId: content.blobId,
+      sealResourceId: content.sealResourceId,
+      isLocked: content.isLocked,
+    });
+
     // Open appropriate window based on content type
     // As creator (isCreator = true), use SpaceOwnership for authentication
     if (content.type === 'video' && content.blobId) {
-      openVideo(content.blobId, spaceId, content.title, content.isLocked || false, true, ownershipId);
+      // FIXED: Pass sealResourceId (not spaceId) as the resourceId parameter
+      const resourceId = content.sealResourceId || content.blobId;
+      openVideo(content.blobId, resourceId, content.title, content.isLocked || false, true, ownershipId);
     } else if (content.type === 'essay' && content.blobId) {
       openEssay(content.blobId, spaceId, content.title, content.isLocked || false, true, ownershipId);
     }
@@ -650,6 +660,7 @@ export function SpacePreviewWindow() {
                     models={visibleModels}
                     enableGallery={true} 
                     isPreview={true}
+                    enableSubscriberAvatars={true}
                   />
                 </RetroFrameCanvas>
               ) : (
