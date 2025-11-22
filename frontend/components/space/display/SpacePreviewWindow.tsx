@@ -48,7 +48,7 @@ export function SpacePreviewWindow() {
   const [isCreatingSpace, setIsCreatingSpace] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeEditTab, setActiveEditTab] = useState<'nfts' | 'content' | 'screen' | 'settings'>('nfts');
+  const [activeEditTab, setActiveEditTab] = useState<'nfts' | 'content' | 'settings'>('nfts');
   const [showUploadWindow, setShowUploadWindow] = useState(false);
   
   // Content data from custom hook
@@ -106,7 +106,7 @@ export function SpacePreviewWindow() {
 
   // Auto-switch to content tab when in landing mode and current tab is not available
   React.useEffect(() => {
-    if (viewMode === 'landing' && (activeEditTab === 'nfts' || activeEditTab === 'screen')) {
+    if (viewMode === 'landing' && activeEditTab === 'nfts') {
       setActiveEditTab('content');
     }
   }, [viewMode, activeEditTab]);
@@ -448,7 +448,6 @@ export function SpacePreviewWindow() {
                 {[
                   { id: 'nfts', label: 'NFTs' },
                   { id: 'content', label: 'Content' },
-                  { id: 'screen', label: 'Screen' },
                   { id: 'settings', label: 'Settings' },
                 ].filter(tab => {
                   // In landing mode, show Content and Settings tabs only
@@ -503,15 +502,8 @@ export function SpacePreviewWindow() {
                     ownershipId={selectedSpace.ownershipId}
                   />
                 )}
-                {activeEditTab === 'screen' && (
-                  <ScreenConfig
-                    config={screenConfig}
-                    onChange={setScreenConfig}
-                    availableContent={[]}
-                  />
-                )}
                 {activeEditTab === 'settings' && selectedSpace && (
-                  <div className="space-y-4">
+                  <div className="space-y-6">
                     <div>
                       <h3 className="text-lg font-bold text-gray-800 mb-2" style={{ fontFamily: 'Georgia, serif' }}>
                         💰 Subscription Settings
@@ -524,11 +516,31 @@ export function SpacePreviewWindow() {
                       spaceId={selectedSpace.spaceId}
                       ownershipId={selectedSpace.ownershipId}
                       currentPrice={selectedSpace.subscriptionPrice || "0"}
-                      onUpdated={() => {
-                        refetch();
-                        alert('Subscription price updated successfully!');
+                      onUpdated={(newPriceInMist: string) => {
+                        // Update local state immediately without refetching
+                        setSelectedSpace(prev => {
+                          if (!prev) return prev;
+                          return {
+                            ...prev,
+                            subscriptionPrice: newPriceInMist
+                          };
+                        });
                       }}
                     />
+                    
+                    <div className="pt-6 border-t border-gray-200">
+                      <h3 className="text-lg font-bold text-gray-800 mb-2" style={{ fontFamily: 'Georgia, serif' }}>
+                        📺 Big Screen Configuration
+                      </h3>
+                      <p className="text-sm text-gray-600 mb-4" style={{ fontFamily: 'Georgia, serif' }}>
+                        Configure content displayed on the big screen in your space
+                      </p>
+                      <ScreenConfig
+                        config={screenConfig}
+                        onChange={setScreenConfig}
+                        availableContent={[]}
+                      />
+                    </div>
                   </div>
                 )}
               </div>

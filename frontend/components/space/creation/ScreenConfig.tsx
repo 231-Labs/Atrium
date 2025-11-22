@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from 'react';
-import { RetroPanel } from '@/components/common/RetroPanel';
 import { RetroButton } from '@/components/common/RetroButton';
 import { RetroSelect, RetroToggle } from '@/components/common/RetroForm';
 import { SpaceScreenConfig } from '@/utils/spaceConfig';
@@ -28,72 +27,66 @@ export function ScreenConfig({ config, onChange, availableContent }: ScreenConfi
   const filteredContent = availableContent.filter(c => c.type === selectedType);
 
   return (
-    <RetroPanel className="p-4">
-      <h3 className="text-sm font-bold text-gray-800 mb-4 uppercase tracking-wide" style={{ fontFamily: 'Georgia, serif' }}>
-        Big Screen Configuration
-      </h3>
+    <div className="space-y-4">
+      <RetroSelect
+        label="Content Type"
+        value={selectedType}
+        onChange={(e) => {
+          setSelectedType(e.target.value as any);
+          setSelectedBlobId('');
+        }}
+        options={[
+          { value: 'none', label: 'None (Empty Screen)' },
+          { value: 'video', label: 'Video' },
+          { value: 'image', label: 'Image' },
+        ]}
+      />
 
-      <div className="space-y-4">
-        <RetroSelect
-          label="Content Type"
-          value={selectedType}
-          onChange={(e) => {
-            setSelectedType(e.target.value as any);
-            setSelectedBlobId('');
-          }}
-          options={[
-            { value: 'none', label: 'None (Empty Screen)' },
-            { value: 'video', label: 'Video' },
-            { value: 'image', label: 'Image' },
-          ]}
-        />
+      {selectedType !== 'none' && (
+        <>
+          <RetroSelect
+            label="Select Content"
+            value={selectedBlobId}
+            onChange={(e) => setSelectedBlobId(e.target.value)}
+            options={[
+              { value: '', label: '-- Select --' },
+              ...filteredContent.map(c => ({
+                value: c.id,
+                label: c.title,
+              })),
+            ]}
+          />
 
-        {selectedType !== 'none' && (
-          <>
-            <RetroSelect
-              label="Select Content"
-              value={selectedBlobId}
-              onChange={(e) => setSelectedBlobId(e.target.value)}
-              options={[
-                { value: '', label: '-- Select --' },
-                ...filteredContent.map(c => ({
-                  value: c.id,
-                  label: c.title,
-                })),
-              ]}
+          {selectedType === 'video' && (
+            <RetroToggle
+              label="Autoplay"
+              checked={autoplay}
+              onChange={setAutoplay}
             />
+          )}
 
-            {selectedType === 'video' && (
-              <RetroToggle
-                label="Autoplay"
-                checked={autoplay}
-                onChange={setAutoplay}
-              />
-            )}
-
-            {selectedBlobId && (
-              <div className="p-3 bg-gray-50 rounded">
-                <p className="text-xs text-gray-600 mb-2" style={{ fontFamily: 'Georgia, serif' }}>
-                  Preview:
-                </p>
-                <div className="w-full h-32 bg-gray-200 rounded flex items-center justify-center">
-                  {selectedType === 'video' ? '🎬' : '🖼️'}
-                </div>
+          {selectedBlobId && (
+            <div className="p-3 bg-gray-50 rounded">
+              <p className="text-xs text-gray-600 mb-2" style={{ fontFamily: 'Georgia, serif' }}>
+                Preview:
+              </p>
+              <div className="w-full h-32 bg-gray-200 rounded flex items-center justify-center">
+                {selectedType === 'video' ? '🎬' : '🖼️'}
               </div>
-            )}
-          </>
-        )}
+            </div>
+          )}
+        </>
+      )}
 
-        <RetroButton
-          variant="primary"
-          className="w-full"
-          onClick={handleSave}
-          disabled={selectedType !== 'none' && !selectedBlobId}
-        >
-          Apply Configuration
-        </RetroButton>
-      </div>
-    </RetroPanel>
+      <RetroButton
+        variant="primary"
+        className="w-full"
+        onClick={handleSave}
+        disabled={selectedType !== 'none' && !selectedBlobId}
+      >
+        Apply Configuration
+      </RetroButton>
+    </div>
   );
 }
 

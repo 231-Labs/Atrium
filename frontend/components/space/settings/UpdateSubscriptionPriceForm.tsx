@@ -6,11 +6,13 @@ import { RetroPanel } from "@/components/common/RetroPanel";
 import { RetroButton } from "@/components/common/RetroButton";
 import { updateSpaceConfig, MIST_PER_SUI, SUI_CHAIN } from "@/utils/transactions";
 
+type TransactionStatus = 'idle' | 'loading' | 'success' | 'error';
+
 interface UpdateSubscriptionPriceFormProps {
   spaceId: string;
   ownershipId: string;
   currentPrice: string; // In MIST
-  onUpdated?: () => void;
+  onUpdated?: (newPriceInMist: string) => void;
   onClose?: () => void;
 }
 
@@ -23,7 +25,8 @@ export function UpdateSubscriptionPriceForm({
 }: UpdateSubscriptionPriceFormProps) {
   const currentAccount = useCurrentAccount();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
-  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<TransactionStatus>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
   
   // Convert current price from MIST to SUI for display
   const currentPriceInSui = (parseInt(currentPrice) / MIST_PER_SUI).toFixed(3);
@@ -31,12 +34,14 @@ export function UpdateSubscriptionPriceForm({
 
   const handleUpdate = async () => {
     if (!currentAccount) {
-      alert("Please connect your wallet first");
+      setStatus('error');
+      setErrorMessage("Please connect your wallet first");
       return;
     }
 
     try {
-      setLoading(true);
+      setStatus('loading');
+      setErrorMessage('');
 
       // Convert price from SUI to MIST
       const priceInMist = Math.floor(parseFloat(newPrice) * MIST_PER_SUI);
@@ -57,22 +62,29 @@ export function UpdateSubscriptionPriceForm({
         {
           onSuccess: (result) => {
             console.log('✅ Subscription price updated successfully:', result);
-            alert("Subscription price updated successfully!");
-            setLoading(false);
-            onUpdated?.();
-            onClose?.();
+            setStatus('success');
+            
+            // Call onUpdated immediately with new price (in MIST)
+            if (onUpdated) {
+              onUpdated(priceInMist.toString());
+            }
+            
+            // Auto-hide success message after 2 seconds
+            setTimeout(() => {
+              onClose?.();
+            }, 2000);
           },
           onError: (error) => {
             console.error("❌ Failed to update price:", error);
-            setLoading(false);
-            alert(`Failed to update price: ${error.message || error}`);
+            setStatus('error');
+            setErrorMessage(error.message || 'Transaction failed. Please try again.');
           },
         }
       );
     } catch (error: any) {
       console.error("Error:", error);
-      setLoading(false);
-      alert(`Error: ${error.message}`);
+      setStatus('error');
+      setErrorMessage(error.message || 'An unexpected error occurred');
     }
   };
 
@@ -80,8 +92,51 @@ export function UpdateSubscriptionPriceForm({
 
   return (
     <div className="space-y-4">
-      <RetroPanel variant="inset" className="p-4">
-        <div className="space-y-3">
+      {/* Status Messages */}
+      {status === 'success' && (
+        <RetroPanel variant="inset" className="p-3 bg-green-50 border-green-200">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">✅</span>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-green-800" style={{ fontFamily: 'Georgia, serif' }}>
+                Price Updated Successfully!
+              </p>
+              <p className="text-xs text-green-600" style={{ fontFamily: 'Georgia, serif' }}>
+                Your subscription price has been updated. New subscribers will see the updated price.
+              </p>
+            </div>
+          </div>
+        </RetroPanel>
+      )}
+
+      {status === 'error' && (
+        <RetroPanel variant="inset" className="p-3 bg-red-50 border-red-200">
+          <div className="flex items-start gap-2">
+            <span className="text-xl">❌</span>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-red-800 mb-1" style={{ fontFamily: 'Georgia, serif' }}>
+                Update Failed
+              </p>
+              <p className="text-xs text-red-600 leading-tight" style={{ fontFamily: 'Georgia, serif' }}>
+                {errorMessage}
+              </p>
+              <button
+                onClick={() => setStatus('idle')}
+                className="text-xs text-red-700 underline mt-2 hover:text-red-900"
+                style={{ fontFamily: 'Georgia, serif' }}
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </RetroPanel>
+      )}
+
+      {/* Form - Hide when success */}
+      {status !== 'success' && (
+        <>
+          <RetroPanel variant="inset" className="p-4">
+            <div className="space-y-3">
           {/* Current Price Display */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-2 uppercase tracking-wide" style={{ fontFamily: 'Georgia, serif' }}>
@@ -133,33 +188,35 @@ export function UpdateSubscriptionPriceForm({
               </p>
             </div>
           )}
-        </div>
-      </RetroPanel>
+            </div>
+          </RetroPanel>
 
-      <div className="flex gap-3">
-        {onClose && (
-          <RetroButton
-            onClick={onClose}
-            variant="secondary"
-            className="flex-1"
-            disabled={loading}
-          >
-            Cancel
-          </RetroButton>
-        )}
-        <RetroButton
-          onClick={handleUpdate}
-          variant="primary"
-          className="flex-1"
-          disabled={loading || !priceChanged || !currentAccount}
-        >
-          {loading ? "Updating..." : "Update Price"}
-        </RetroButton>
-      </div>
+          <div className="flex gap-3">
+            {onClose && (
+              <RetroButton
+                onClick={onClose}
+                variant="secondary"
+                className="flex-1"
+                disabled={status === 'loading'}
+              >
+                Cancel
+              </RetroButton>
+            )}
+            <RetroButton
+              onClick={handleUpdate}
+              variant="primary"
+              className="flex-1"
+              disabled={status === 'loading' || !priceChanged || !currentAccount}
+            >
+              {status === 'loading' ? "Updating..." : "Update Price"}
+            </RetroButton>
+          </div>
 
-      <p className="text-xs text-gray-500 text-center" style={{ fontFamily: 'Georgia, serif' }}>
-        Requires SpaceOwnership NFT to update
-      </p>
+          <p className="text-xs text-gray-500 text-center" style={{ fontFamily: 'Georgia, serif' }}>
+            Requires SpaceOwnership NFT to update
+          </p>
+        </>
+      )}
     </div>
   );
 }
