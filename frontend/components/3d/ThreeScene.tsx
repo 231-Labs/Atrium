@@ -1,5 +1,6 @@
 "use client";
 
+import * as THREE from 'three';
 import { useThreeScene } from '@/hooks/three/useThreeScene';
 import { useAIWeather } from '@/hooks/useAIWeather';
 import { useSpaceSubscribers } from '@/hooks/useSpaceSubscribers';
@@ -241,7 +242,7 @@ export const ThreeScene = forwardRef<ThreeSceneApi, ThreeSceneProps>(({
     });
   }, [sceneInitialized, sceneManager, models, loadedModelsMap, loadModel, removeModel]);
 
-  // Handle subscriber avatars: place them on audience seats
+  // Handle subscriber avatars: place them on audience seats with floating platforms
   useEffect(() => {
     if (!sceneInitialized || !sceneManager || !enableSubscriberAvatars) {
       return;
@@ -252,9 +253,9 @@ export const ThreeScene = forwardRef<ThreeSceneApi, ThreeSceneProps>(({
     }
     
     if (subscribers.length === 0) {
-      // Cleanup old subscriber avatars
+      // Cleanup old subscriber avatars and platforms
       Array.from(loadedModelsMap.keys()).forEach(modelId => {
-        if (modelId.startsWith('subscriber-')) {
+        if (modelId.startsWith('subscriber-') || modelId.startsWith('platform-')) {
           removeModel(modelId);
         }
       });
@@ -293,25 +294,38 @@ export const ThreeScene = forwardRef<ThreeSceneApi, ThreeSceneProps>(({
       return;
     }
 
-    // Cleanup old subscriber avatars
+    // Cleanup old subscriber avatars and platforms
     Array.from(loadedModelsMap.keys()).forEach(modelId => {
-      if (modelId.startsWith('subscriber-')) {
+      if (modelId.startsWith('subscriber-') || modelId.startsWith('platform-')) {
         removeModel(modelId);
       }
     });
 
-    // Load each subscriber avatar
+    // Determine theme colors based on weather mode
+    const isDark = weatherMode === 'night' || 
+                   (weatherMode === 'dynamic' && isDynamicNight);
+
+    // Load each subscriber avatar with floating platform
     displayedSubscribers.forEach((subscriber, index) => {
       const seat = shuffledSeats[index];
       if (!seat) return;
 
+      // Create floating platform for this subscriber
+      createFloatingPlatform(
+        seat,
+        `platform-${subscriber.address}`,
+        isDark,
+        index
+      );
+
+      // Load subscriber avatar (slightly above the platform)
       const subscriberModel: Model3DItem = {
         id: `subscriber-${subscriber.address}`,
         name: subscriber.username || `Subscriber ${subscriber.address.slice(0, 6)}`,
         modelUrl: subscriber.avatarUrl,
         position: {
           x: seat.position.x,
-          y: seat.position.y,
+          y: seat.position.y + 0.5, // Elevated above platform
           z: seat.position.z,
         },
         rotation: {
@@ -335,7 +349,89 @@ export const ThreeScene = forwardRef<ThreeSceneApi, ThreeSceneProps>(({
     enableSubscriberAvatars, 
     subscribers, 
     subscribersLoading,
+    weatherMode,
+    isDynamicNight,
   ]);
+
+  // Helper: Create a floating platform beneath subscriber
+  const createFloatingPlatform = (
+    seat: { position: THREE.Vector3; rotation: number; index: number },
+    platformId: string,
+    isDark: boolean,
+    index: number
+  ) => {
+    if (!sceneManager) return;
+
+    const scene = sceneManager.getScene();
+    const platformGroup = new THREE.Group();
+    platformGroup.name = platformId;
+
+    // Platform colors based on theme
+    const platformColor = isDark ? 0x334155 : 0xe8dcc8; // Slate-700 / Beige
+    const accentColor = isDark ? 0x38bdf8 : 0xff8844;   // Sky-400 / Orange
+    const emissiveColor = isDark ? 0x1e293b : 0xffffff;
+    const emissiveIntensity = isDark ? 0.2 : 0.1;
+
+    // Main platform (octagonal prism)
+    const platformGeometry = new THREE.CylinderGeometry(1.2, 1.0, 0.3, 8);
+    const platformMaterial = new THREE.MeshStandardMaterial({
+      color: platformColor,
+      roughness: isDark ? 0.4 : 0.6,
+      metalness: isDark ? 0.5 : 0.1,
+      flatShading: true,
+      emissive: emissiveColor,
+      emissiveIntensity: emissiveIntensity,
+    });
+    const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+    platform.castShadow = true;
+    platform.receiveShadow = true;
+    platformGroup.add(platform);
+
+    // Glowing rim
+    const rimGeometry = new THREE.TorusGeometry(1.25, 0.03, 6, 8);
+    const rimMaterial = new THREE.MeshBasicMaterial({
+      color: accentColor,
+      transparent: true,
+      opacity: 0.6,
+    });
+    const rim = new THREE.Mesh(rimGeometry, rimMaterial);
+    rim.rotation.x = Math.PI / 2;
+    rim.rotation.z = Math.PI / 8; // Align with octagon
+    platformGroup.add(rim);
+
+    // Bottom crystal (inverted cone)
+    const crystalGeometry = new THREE.ConeGeometry(0.4, 1.5, 6);
+    const crystalMaterial = new THREE.MeshStandardMaterial({
+      color: accentColor,
+      emissive: accentColor,
+      emissiveIntensity: 0.4,
+      roughness: 0.2,
+      metalness: 0.8,
+      transparent: true,
+      opacity: 0.8,
+    });
+    const crystal = new THREE.Mesh(crystalGeometry, crystalMaterial);
+    crystal.position.y = -1.0;
+    crystal.rotation.x = Math.PI; // Point downward
+    platformGroup.add(crystal);
+
+    // Position the entire platform group
+    platformGroup.position.copy(seat.position);
+    platformGroup.position.y -= 0.3; // Slightly below avatar feet
+
+    // Add gentle floating animation
+    platformGroup.userData.floatOffset = index * 0.5;
+    platformGroup.userData.baseY = platformGroup.position.y;
+    platformGroup.userData.isFloatingPlatform = true;
+
+    scene.add(platformGroup);
+
+    // Store reference for cleanup (hack: use loadedModels map)
+    const manager = sceneManager as any;
+    if (manager.loadedModels) {
+      manager.loadedModels.set(platformId, platformGroup);
+    }
+  };
 
   // Update weather when params change
   useEffect(() => {

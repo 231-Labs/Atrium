@@ -166,6 +166,7 @@ export class SceneManager {
       this.animationId = requestAnimationFrame(animate);
       
       const deltaTime = this.clock.getDelta();
+      const elapsedTime = this.clock.getElapsedTime();
       
       this.controls.update();
 
@@ -196,6 +197,18 @@ export class SceneManager {
           this.controls.enabled = true;
         }
       }
+
+      // Animate floating platforms
+      this.scene.traverse((obj) => {
+        if (obj.userData.isFloatingPlatform) {
+          const baseY = obj.userData.baseY || 0;
+          const offset = obj.userData.floatOffset || 0;
+          // Gentle sine wave float: amplitude 0.1, period 3 seconds
+          obj.position.y = baseY + Math.sin(elapsedTime * 2.0 + offset) * 0.1;
+          // Slight rotation for organic feel
+          obj.rotation.y = Math.sin(elapsedTime * 0.5 + offset) * 0.05;
+        }
+      });
 
       // Update gallery scene animations
       if (this.galleryScene) {

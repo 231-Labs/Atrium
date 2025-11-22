@@ -70,6 +70,7 @@ export class AtriumGalleryScene {
     this.createFloatingOrbs(); // Add decorative light orbs
     this.createGuardianStones(); // Add cyber polygonal guardian stones
     this.initializeAudienceSeatPositions(); // Initialize positions without creating visual seats
+    // this.createAudienceAreaDebugVisual(); // DEBUG REMOVED
     this.createStageSpotlights(config.enableSpotlights);
     this.createAmbientParticles(config.enableAmbientParticles);
     
@@ -1170,83 +1171,63 @@ export class AtriumGalleryScene {
   }
 
   // Initialize seat positions without creating visual objects
-  // Generates random positions around the stage for organic crowd feeling
+  // Positions audience members in front of the stage, facing center
   private initializeAudienceSeatPositions() {
-    const totalSeats = 100; // Generate 100 potential seat positions
-    const minRadius = 10;
-    const maxRadius = 18;
-    const minHeight = 0.1;
-    const maxHeight = 1.2;
+    const totalSeats = 100;
+    const minRadius = 15;  // Increased from 10 to 15
+    const maxRadius = 22;  // Increased from 18 to 22
+    const minHeight = 0.5;
+    const maxHeight = 2.0;
     
-    // Screen parameters to avoid collision
-    const screenRadius = 14;
-    const screenArcAngle = Math.PI * 0.8; // 144 degrees
-    const screenStartAngle = Math.PI - screenArcAngle / 2; // ~0.6π (108°)
-    const screenEndAngle = Math.PI + screenArcAngle / 2; // ~1.4π (252°)
-    const screenBuffer = 0.15; // Add 15 degree buffer on each side
+    // Screen is at the BACK (around π ≈ 180°, from ~108° to 252°)
+    // Define audience viewing area - in front of the screen, looking at stage
+    // Corrected for Z-axis visual mirroring: To match the visual "Red Zone" (Z > 0),
+    // we need angles 30° to 150° (sin > 0)
+    const frontArcStart = Math.PI / 6;      // 30 degrees
+    const frontArcEnd = Math.PI * 5/6;      // 150 degrees
     
-    // Use seeded random for consistent positions across sessions
+    // Use seeded random for consistent positions
     const seededRandom = (seed: number) => {
       const x = Math.sin(seed++) * 10000;
       return x - Math.floor(x);
     };
 
     for (let i = 0; i < totalSeats; i++) {
-      // Random angle around full 360 degrees (except front arc for viewing and screen area)
-      const excludeFrontArc = Math.PI * 0.25; // Exclude 45 degree front arc
-      let angle = seededRandom(i * 7 + 1) * Math.PI * 2;
+      // Generate angle in specified arc (210° to 330°)
+      const angleRange = frontArcEnd - frontArcStart;
       
-      // If in front viewing arc, shift to back
-      if (angle < excludeFrontArc || angle > Math.PI * 2 - excludeFrontArc) {
-        angle += Math.PI;
-      }
+      let angle = frontArcStart + seededRandom(i * 7 + 1) * angleRange;
       
-      // Check if angle is in screen area (with buffer)
-      const screenMinAngle = screenStartAngle - screenBuffer;
-      const screenMaxAngle = screenEndAngle + screenBuffer;
+      const variation = (seededRandom(i * 11 + 3) - 0.5) * 0.1; 
+      angle += variation;
       
-      // If in screen area, shift angle to avoid collision
-      if (angle >= screenMinAngle && angle <= screenMaxAngle) {
-        // Shift to either side of screen, whichever is closer
-        const distToLeft = angle - screenMinAngle;
-        const distToRight = screenMaxAngle - angle;
-        
-        if (distToLeft < distToRight) {
-          angle = screenMinAngle - 0.2; // Shift left
-        } else {
-          angle = screenMaxAngle + 0.2; // Shift right
-        }
-      }
+      // Strict clamping to ensure models stay inside
+      const buffer = 0.05;
+      angle = Math.max(frontArcStart + buffer, Math.min(frontArcEnd - buffer, angle));
       
-      // Random radius with slight preference for closer seats
       const radiusRandom = seededRandom(i * 13 + 2);
-      let radius = minRadius + Math.pow(radiusRandom, 1.5) * (maxRadius - minRadius);
+      const radiusBuffer = 0.5;
+      let radius = minRadius + Math.pow(radiusRandom, 1.8) * (maxRadius - minRadius);
+      radius = Math.max(minRadius + radiusBuffer, Math.min(maxRadius - radiusBuffer, radius));
       
-      // If seat is behind screen area and radius would overlap, adjust radius
-      if (angle >= screenStartAngle - 0.3 && angle <= screenEndAngle + 0.3 && radius > screenRadius - 2) {
-        radius = Math.min(radius, screenRadius - 2.5); // Keep seats in front of screen
-      }
-      
-      // Random height
       const height = minHeight + seededRandom(i * 17 + 3) * (maxHeight - minHeight);
       
       const x = Math.cos(angle) * radius;
       const z = Math.sin(angle) * radius;
 
       const seatPosition: AudienceSeatPosition = {
-        position: new THREE.Vector3(x, height + 0.2, z),
-        rotation: angle - Math.PI / 2, // Face the stage
+        position: new THREE.Vector3(x, height, z),
+        rotation: Math.atan2(-x, -z),
         index: i,
       };
       this.audienceSeatPositions.push(seatPosition);
     }
     
-    // Shuffle positions for more natural fill order
+    // Shuffle for natural fill order
     for (let i = this.audienceSeatPositions.length - 1; i > 0; i--) {
       const j = Math.floor(seededRandom(i * 23 + 5) * (i + 1));
       [this.audienceSeatPositions[i], this.audienceSeatPositions[j]] = 
         [this.audienceSeatPositions[j], this.audienceSeatPositions[i]];
-      // Update indices after shuffle
       this.audienceSeatPositions[i].index = i;
       this.audienceSeatPositions[j].index = j;
     }
