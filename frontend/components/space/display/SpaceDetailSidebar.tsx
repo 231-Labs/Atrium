@@ -34,7 +34,7 @@ interface SpaceDetailSidebarProps {
   onUnlock: (itemId: string) => void;
   onView: (itemId: string) => void;
   onViewIn3D?: (nftId: string) => void;
-  onPurchase: (nftId: string, nftType: string, price: string) => void;
+  onPurchase: (nftId: string, nftType: string, price: string) => Promise<void>;
   onJoinAtrium: () => void;
 }
 
