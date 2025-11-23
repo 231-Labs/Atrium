@@ -145,7 +145,6 @@ export const ThreeScene = forwardRef<ThreeSceneApi, ThreeSceneProps>(({
     chainData, 
     isLoading: weatherLoading, 
     refreshWeather, 
-    lastUpdate,
     error: weatherError 
   } = useAIWeather({
     autoUpdate: isDynamicMode,
