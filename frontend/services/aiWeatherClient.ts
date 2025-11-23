@@ -30,12 +30,6 @@ export async function fetchWeatherFromAPI(): Promise<WeatherAPIResponse> {
     }
 
     const data = await response.json();
-    console.log('✅ Weather data received from API:', {
-      cached: data.cached,
-      weatherType: data.weatherType,
-      specialEvents: data.specialEvents,
-    });
-
     return data;
   } catch (error) {
     console.error('❌ Failed to fetch weather from API:', error);
@@ -58,8 +52,6 @@ export async function refreshWeatherCache(adminToken: string): Promise<void> {
     if (!response.ok) {
       throw new Error('Failed to refresh cache');
     }
-
-    console.log('✅ Weather cache refreshed');
   } catch (error) {
     console.error('❌ Failed to refresh weather cache:', error);
     throw error;

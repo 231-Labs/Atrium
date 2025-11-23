@@ -273,7 +273,7 @@ class ChainDataApiService {
       };
 
       console.log('✅ Chain data fetched successfully:', {
-        sui: `$${sui.price.toFixed(4)} (${sui.priceChange24h.toFixed(2)}%)`, // SUI displayed first
+        sui: `$${sui.price.toFixed(4)} (${sui.priceChange24h.toFixed(2)}%)`,
         wal: `$${wal.price.toFixed(4)} (${wal.priceChange24h.toFixed(2)}%)`,
         btc: `$${btc.price.toFixed(2)} (${btc.priceChange24h.toFixed(2)}%)`,
         eth: `$${eth.price.toFixed(2)} (${eth.priceChange24h.toFixed(2)}%)`,

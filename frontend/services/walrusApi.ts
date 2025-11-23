@@ -28,8 +28,6 @@ export class WalrusApiService {
 
     this.aggregatorUrl = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR || 'https://aggregator.walrus-testnet.walrus.space';
     this.currentPublisherIndex = 0;
-
-    console.log('Configured publishers:', this.publisherUrls);
   }
 
   private getNextPublisher(): string {
@@ -49,11 +47,6 @@ export class WalrusApiService {
       const url = new URL('/v1/blobs', publisherUrl);
       url.searchParams.set('epochs', epochs);
 
-      console.log('Uploading to:', url.toString());
-      console.log('File size:', fileBuffer.length, 'bytes');
-      console.log('Epochs:', epochs);
-      console.log('Retry count:', retryCount);
-
       const response = await fetch(url.toString(), {
         method: 'PUT',
         headers: {
@@ -65,12 +58,10 @@ export class WalrusApiService {
       });
 
       const responseText = await response.text();
-      console.log('Upload response:', response.status, responseText);
 
       if (!response.ok) {
         // 處理所有可能的錯誤狀態碼
         if (response.status === 429 || response.status === 413 || response.status >= 500) {
-          console.log(`Error ${response.status}, trying next publisher...`);
           return this.uploadBlob(fileBuffer, epochs, retryCount + 1);
         }
         throw new Error(`Upload failed: ${response.status} ${responseText}`);
@@ -80,7 +71,6 @@ export class WalrusApiService {
     } catch (error) {
       console.error('Upload error:', error);
       if (error instanceof Error && error.message.includes('failed to fetch')) {
-        console.log('Connection failed, trying next publisher...');
         return this.uploadBlob(fileBuffer, epochs, retryCount + 1);
       }
       throw error;
@@ -125,14 +115,6 @@ export class WalrusApiService {
       }
 
       const fileBlob = file as Blob;
-      
-      console.log('Processing file upload:', {
-        fileName: (file as any).name || 'unknown',
-        fileSize: fileBlob.size,
-        fileType: fileBlob.type,
-        epochs
-      });
-
       const fileBuffer = Buffer.from(await fileBlob.arrayBuffer());
       return this.uploadBlob(fileBuffer, epochs);
     } catch (error) {
@@ -169,17 +151,11 @@ export async function uploadToWalrus(file: File | Blob, epochs: string = '50'): 
   const fileBuffer = Buffer.from(await file.arrayBuffer());
   const result = await walrusApi.uploadBlob(fileBuffer, epochs);
   
-  console.log('Walrus upload result:', result);
-  console.log('Full result structure:', JSON.stringify(result, null, 2));
-  
   // Extract metadata from response
   let response: WalrusUploadResponse;
   
   if (result.newlyCreated) {
     const blobObject = result.newlyCreated.blobObject;
-    console.log('Extracting from newlyCreated.blobObject:', blobObject);
-    console.log('Object ID:', blobObject.id);
-    
     response = {
       blobId: blobObject.blobId,
       objectId: blobObject.id,

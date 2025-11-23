@@ -119,7 +119,6 @@ export function useThreeScene(options: UseThreeSceneOptions = {}) {
         return newMap;
       });
 
-      console.log(`✅ Model loaded: ${modelItem.name}`);
       return model;
     } catch (error) {
       console.error(`❌ Failed to load model ${modelItem.name}:`, error);

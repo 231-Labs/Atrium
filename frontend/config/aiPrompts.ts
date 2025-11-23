@@ -27,6 +27,9 @@ export function buildSceneGenerationPrompt(
     return `${sign}${change.toFixed(2)}%`;
   };
   
+  // Get weighted average for market direction
+  const avgChange = aggregatedMetrics.averageChange;
+  
   let marketDataSection = `**Current Market Data (Weather Influence Weight: SUI 40% > WAL 30% > BTC 20% > ETH 10%):**
 - SUI (Primary): $${sui.price.toFixed(4)}, 24h change: ${formatPriceChange(sui.priceChange24h)}, volume: $${(sui.volume24h / 1e9).toFixed(2)}B
 - WAL/Walrus (Secondary): $${wal.price.toFixed(4)}, 24h change: ${formatPriceChange(wal.priceChange24h)}, volume: $${(wal.volume24h / 1e9).toFixed(2)}B
@@ -101,7 +104,19 @@ export function buildSceneGenerationPrompt(
     }
   }
 
+  // Create explicit market direction summary
+  const marketDirectionSummary = avgChange > 0 
+    ? `🟢 MARKET IS RISING: All prices are UP with weighted average of ${formatPriceChange(avgChange)}. Use BULLISH weather (sunny/cloudy) regardless of Fear & Greed Index.`
+    : avgChange < 0
+    ? `🔴 MARKET IS FALLING: Prices are DOWN with weighted average of ${formatPriceChange(avgChange)}. Use BEARISH weather (rainy/stormy).`
+    : `⚪ MARKET IS FLAT: Prices are neutral at ${formatPriceChange(avgChange)}. Use NEUTRAL weather (cloudy).`;
+
   return `You are an AI that generates 3D scene parameters based on cryptocurrency market data, time factors, and special events.
+
+⚠️⚠️⚠️ CRITICAL MARKET DIRECTION ⚠️⚠️⚠️
+${marketDirectionSummary}
+
+DO NOT let Fear & Greed Index override actual price movements. If prices are UP (+), weather MUST be bullish (sunny/cloudy). If DOWN (-), weather MUST be bearish (rainy/stormy).
 
 ${marketDataSection}
 ${timeFactorsSection}

@@ -15,11 +15,12 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 let cachedWeatherData: {
   data: SceneWeatherParams;
   timestamp: number;
+  cacheKey: string; // Add cache key based on data
 } | null = null;
 
 // Rate limiting (simple version)
 let lastRequestTime = 0;
-const MIN_REQUEST_INTERVAL = 60 * 1000; // Max 1 request per minute
+const MIN_REQUEST_INTERVAL = 30 * 1000; // Max 1 request per 30 seconds (reduced from 60s)
 
 /**
  * GET /api/ai-weather
@@ -28,19 +29,42 @@ const MIN_REQUEST_INTERVAL = 60 * 1000; // Max 1 request per minute
 export async function GET(request: NextRequest) {
   try {
     const now = Date.now();
+    const { searchParams } = new URL(request.url);
+    const forceRefresh = searchParams.get('refresh') === 'true';
 
-    // 1. Check cache
-    if (cachedWeatherData && (now - cachedWeatherData.timestamp) < CACHE_DURATION) {
-      console.log('📦 Returning cached weather data');
-      return NextResponse.json({
-        ...cachedWeatherData.data,
-        cached: true,
-        cacheAge: Math.floor((now - cachedWeatherData.timestamp) / 1000),
-      });
+    // 3. Get chain data first (use cache if available)
+    console.log('🔍 Fetching crypto data...');
+    const chainData = await chainDataApi.getChainDataSnapshot(forceRefresh);
+    
+    // Create cache key based on actual data content
+    const cacheKey = JSON.stringify({
+      avgChange: chainData.aggregatedMetrics.averageChange.toFixed(2),
+      sentiment: chainData.aggregatedMetrics.marketSentiment,
+      volatility: chainData.aggregatedMetrics.volatility.toFixed(2),
+      sui: chainData.sui.priceChange24h.toFixed(2),
+      wal: chainData.wal.priceChange24h.toFixed(2),
+      btc: chainData.btc.priceChange24h.toFixed(2),
+      eth: chainData.eth.priceChange24h.toFixed(2),
+      hour: new Date().getHours(), // Include hour for time-based factors
+    });
+
+    // 1. Check cache (only if not forcing refresh and cache key matches)
+    if (!forceRefresh && cachedWeatherData && (now - cachedWeatherData.timestamp) < CACHE_DURATION) {
+      if (cachedWeatherData.cacheKey === cacheKey) {
+        console.log('📦 Returning cached weather data (data unchanged)');
+        return NextResponse.json({
+          ...cachedWeatherData.data,
+          cached: true,
+          cacheAge: Math.floor((now - cachedWeatherData.timestamp) / 1000),
+        });
+      } else {
+        console.log('🔄 Cache key changed, invalidating cache');
+        cachedWeatherData = null; // Invalidate cache if data changed
+      }
     }
 
-    // 2. Rate limiting
-    if (now - lastRequestTime < MIN_REQUEST_INTERVAL) {
+    // 2. Rate limiting (skip if forcing refresh)
+    if (!forceRefresh && now - lastRequestTime < MIN_REQUEST_INTERVAL) {
       const waitTime = Math.ceil((MIN_REQUEST_INTERVAL - (now - lastRequestTime)) / 1000);
       return NextResponse.json(
         { 
@@ -54,27 +78,22 @@ export async function GET(request: NextRequest) {
 
     lastRequestTime = now;
 
-    // 3. Get chain data (use cache if available)
-    console.log('🔍 Fetching crypto data...');
-    const chainData = await chainDataApi.getChainDataSnapshot(false);
-
     // 4. Call POE API (if configured)
     const POE_API_KEY = process.env.POE_API_KEY || process.env.NEXT_PUBLIC_POE_API_KEY;
     let weatherParams: SceneWeatherParams;
 
     if (POE_API_KEY) {
-      console.log('🤖 Calling POE API from backend...');
+      console.log('🤖 Generating AI weather parameters...');
       
       const timeFactors = getTimeFactors();
-      console.log('⏰ Time factors:', {
-        specialDate: timeFactors.specialDate?.name,
-        timeTendency: timeFactors.timeTendency.description,
-        randomEvent: timeFactors.randomEvent?.name,
-      });
-      
       const prompt = buildSceneGenerationPrompt(chainData, timeFactors);
-      console.log('📋 Prompt sent to AI (first 500 chars):', prompt.substring(0, 500) + '...');
-      console.log('📋 Full prompt length:', prompt.length, 'characters');
+      
+      const requestBody = {
+        model: 'Claude-3-Haiku',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: 500,
+      };
       
       const response = await fetch('https://api.poe.com/v1/chat/completions', {
         method: 'POST',
@@ -82,12 +101,7 @@ export async function GET(request: NextRequest) {
           'Authorization': `Bearer ${POE_API_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          model: 'Claude-3-Haiku',
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.7,
-          max_tokens: 500,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -103,15 +117,11 @@ export async function GET(request: NextRequest) {
       const data = await response.json();
       const aiResponse = data.choices?.[0]?.message?.content || '';
       
-      console.log('📝 POE AI Raw Response:', aiResponse);
-      console.log('📊 POE API Response Data:', JSON.stringify(data, null, 2));
-      
       const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         try {
           weatherParams = JSON.parse(jsonMatch[0]);
-          console.log('✅ AI weather generated successfully');
-          console.log('🌤️ Parsed Weather Params:', JSON.stringify(weatherParams, null, 2));
+          console.log('✅ AI weather generated:', weatherParams.weatherType, '-', weatherParams.reasoning.substring(0, 80) + '...');
         } catch (parseError) {
           console.error('❌ Failed to parse AI JSON response:', parseError);
           console.error('📄 JSON Match:', jsonMatch[0]);
@@ -128,10 +138,11 @@ export async function GET(request: NextRequest) {
       weatherParams = generateFallbackWeather(chainData, timeFactors);
     }
 
-    // 5. Update cache
+    // 5. Update cache with cache key
     cachedWeatherData = {
       data: weatherParams,
       timestamp: now,
+      cacheKey: cacheKey,
     };
 
     return NextResponse.json({
