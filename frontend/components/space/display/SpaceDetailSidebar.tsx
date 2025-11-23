@@ -138,14 +138,29 @@ export function SpaceDetailSidebar({
                 </RetroButton>
               )}
               
-              <ContentList
-                items={displayItems}
-                type={activeTab}
-                isSubscribed={isSubscribed}
-                isCreator={isCreator}
-                onUnlock={onUnlock}
-                onView={onView}
-              />
+              {activeTab === 'merch' ? (
+                space.marketplaceKioskId ? (
+                  <MerchList
+                    kioskId={space.marketplaceKioskId}
+                    onViewIn3D={onViewIn3D}
+                    onPurchase={onPurchase}
+                  />
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="text-4xl mb-3 opacity-30">🛍️</div>
+                    <p className="text-sm text-gray-500 font-serif">No marketplace available</p>
+                  </div>
+                )
+              ) : (
+                <ContentList
+                  items={displayItems}
+                  type={activeTab}
+                  isSubscribed={isSubscribed}
+                  isCreator={isCreator}
+                  onUnlock={onUnlock}
+                  onView={onView}
+                />
+              )}
             </div>
           )}
         </div>

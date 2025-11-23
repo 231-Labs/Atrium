@@ -124,37 +124,49 @@ export async function downloadConfigFromWalrus(blobId: string): Promise<SpaceCon
 }
 
 export async function uploadConfigToWalrus(config: SpaceConfig): Promise<string> {
+  console.log('☁️ Uploading config to Walrus:', config);
+  
   const configJson = JSON.stringify(config, null, 2);
   const blob = new Blob([configJson], { type: 'application/json' });
-
-  const formData = new FormData();
-  formData.append('file', blob, 'config.json');
+  const epochs = 50;
 
   try {
+    console.log('📤 Sending PUT request to Walrus...');
     const response = await fetch(
-      'https://publisher.walrus-testnet.walrus.space/v1/store',
+      `https://publisher.walrus-testnet.walrus.space/v1/blobs?epochs=${epochs}`,
       {
         method: 'PUT',
         body: blob,
       }
     );
 
+    console.log('📥 Walrus response status:', response.status, response.statusText);
+
     if (!response.ok) {
-      throw new Error(`Failed to upload config: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error('❌ Walrus error response:', errorText);
+      throw new Error(`Failed to upload config: ${response.statusText} - ${errorText}`);
     }
 
     const result = await response.json();
+    console.log('✅ Walrus result:', result);
     
     if (result.newlyCreated?.blobObject?.blobId) {
+      console.log('🆕 New blob created:', result.newlyCreated.blobObject.blobId);
       return result.newlyCreated.blobObject.blobId;
     } else if (result.alreadyCertified?.blobId) {
+      console.log('♻️ Blob already exists:', result.alreadyCertified.blobId);
       return result.alreadyCertified.blobId;
     }
 
+    console.error('❌ Unexpected response format:', result);
     throw new Error('Failed to get blob ID from response');
-  } catch (error) {
-    console.error('Failed to upload config to Walrus:', error);
-    throw error;
+  } catch (error: any) {
+    console.error('❌ Failed to upload config to Walrus:', {
+      message: error.message,
+      error
+    });
+    throw new Error(`Walrus upload failed: ${error.message}`);
   }
 }
 

@@ -78,27 +78,94 @@ export async function purchaseNFT(
   nftId: string,
   nftType: string,
   price: bigint,
-  buyerKioskCapId: string,
-  kioskClient: KioskClient
+  buyerKioskId: string | null,
+  kioskClient: KioskClient,
+  buyerAddress: string
 ): Promise<Transaction> {
-  const tx = new Transaction();
-
-  const kioskTx = new KioskTransaction({ 
-    transaction: tx, 
-    kioskClient,
-    cap: buyerKioskCapId as any,
+  console.log('🛒 purchaseNFT called with:', {
+    sellerKioskId,
+    nftId,
+    nftType,
+    price: price.toString(),
+    buyerKioskId,
+    buyerAddress,
+    kioskClient: !!kioskClient
   });
 
-  await kioskTx.purchaseAndResolve({
-    itemId: nftId,
-    itemType: nftType,
-    price,
-    sellerKiosk: sellerKioskId,
-  });
+  if (!kioskClient) {
+    throw new Error('kioskClient is required');
+  }
 
-  kioskTx.finalize();
+  if (!buyerAddress) {
+    throw new Error('buyerAddress is required');
+  }
 
-  return tx;
+  try {
+    const tx = new Transaction();
+    console.log('📝 Transaction created');
+
+    // Fetch the buyer's kiosk caps
+    const { kioskOwnerCaps } = await kioskClient.getOwnedKiosks({
+      address: buyerAddress
+    });
+    
+    console.log('🔑 Fetched kiosk caps:', kioskOwnerCaps?.length || 0);
+    console.log('🔑 All caps:', kioskOwnerCaps?.map(cap => ({
+      objectId: cap.objectId,
+      kioskId: cap.kioskId,
+      isPersonal: cap.isPersonal
+    })));
+
+    if (!kioskOwnerCaps || kioskOwnerCaps.length === 0) {
+      throw new Error('You do not have any kiosks. Please create one in settings first.');
+    }
+
+    // Find the matching cap by kiosk ID, or use the first one if not specified
+    let matchingCap = buyerKioskId 
+      ? kioskOwnerCaps.find(cap => cap.kioskId === buyerKioskId)
+      : kioskOwnerCaps[0];
+    
+    // Fallback to first kiosk if specified one not found
+    if (!matchingCap && buyerKioskId) {
+      console.warn('⚠️ Specified kiosk not found, using first available kiosk');
+      console.warn('  Looking for:', buyerKioskId);
+      console.warn('  Available:', kioskOwnerCaps.map(cap => cap.kioskId));
+      matchingCap = kioskOwnerCaps[0];
+    }
+
+    if (!matchingCap) {
+      throw new Error('Could not find a valid kiosk. Please create one in settings first.');
+    }
+
+    console.log('✅ Using kiosk cap:', {
+      objectId: matchingCap.objectId,
+      kioskId: matchingCap.kioskId,
+      isPersonal: matchingCap.isPersonal
+    });
+
+    const kioskTx = new KioskTransaction({ 
+      transaction: tx, 
+      kioskClient,
+      cap: matchingCap,
+    });
+    console.log('📦 KioskTransaction created');
+
+    await kioskTx.purchaseAndResolve({
+      itemId: nftId,
+      itemType: nftType,
+      price,
+      sellerKiosk: sellerKioskId,
+    });
+    console.log('✅ purchaseAndResolve completed');
+
+    kioskTx.finalize();
+    console.log('✅ Transaction finalized');
+
+    return tx;
+  } catch (error) {
+    console.error('❌ Error in purchaseNFT:', error);
+    throw error;
+  }
 }
 
 export function placeNFT(

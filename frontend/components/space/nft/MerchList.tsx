@@ -6,11 +6,11 @@ import { StateContainer } from "@/components/common/StateContainer";
 interface MerchListProps {
   kioskId: string;
   onViewIn3D?: (nftId: string) => void;
-  onPurchase: (nftId: string, nftType: string, price: string) => void;
+  onPurchase: (nftId: string, nftType: string, price: string) => Promise<void>;
 }
 
 export function MerchList({ kioskId, onViewIn3D, onPurchase }: MerchListProps) {
-  const { listedItems, loading, error } = useKioskListedItems(kioskId);
+  const { listedItems, loading, error, refetch } = useKioskListedItems(kioskId);
 
   return (
     <StateContainer
@@ -19,7 +19,7 @@ export function MerchList({ kioskId, onViewIn3D, onPurchase }: MerchListProps) {
       empty={listedItems.length === 0}
     >
       <StateContainer.Loading>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-3">
           {[...Array(3)].map((_, i) => (
             <RetroPanel key={i} variant="inset" className="h-64 animate-pulse">
               <div />
@@ -35,13 +35,14 @@ export function MerchList({ kioskId, onViewIn3D, onPurchase }: MerchListProps) {
       />
 
       <StateContainer.Content>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-3">
           {listedItems.map((nft) => (
             <MerchCard
               key={nft.id}
               nft={nft}
               onViewIn3D={onViewIn3D}
               onPurchase={onPurchase}
+              onPurchaseSuccess={refetch}
             />
           ))}
         </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSuiClient } from '@mysten/dapp-kit';
 import { KioskClient, Network } from '@mysten/kiosk';
 import { getWalrusBlobUrl } from '@/config/walrus';
@@ -17,11 +17,16 @@ export function useKioskListedItems(kioskId: string | null) {
   const [listedItems, setListedItems] = useState<ListedNFT[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const kioskClient = useMemo(() => new KioskClient({
     client: suiClient,
     network: Network.TESTNET,
   }), [suiClient]);
+
+  const refetch = useCallback(() => {
+    setRefreshTrigger(prev => prev + 1);
+  }, []);
 
   useEffect(() => {
     if (!kioskId) {
@@ -95,8 +100,8 @@ export function useKioskListedItems(kioskId: string | null) {
     };
 
     fetchListedItems();
-  }, [kioskId, kioskClient, suiClient]);
+  }, [kioskId, kioskClient, suiClient, refreshTrigger]);
 
-  return { listedItems, loading, error };
+  return { listedItems, loading, error, refetch };
 }
 

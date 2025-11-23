@@ -22,7 +22,10 @@ import { useSpaceContent } from "@/hooks/useSpaceContent";
 import { useSpaceAuthToken } from "@/hooks/useSpaceAuthToken";
 import { useSpaceConfig } from "@/hooks/useSpaceConfig";
 import { useKioskManagement } from "@/hooks/useKioskManagement";
-import { usePurchaseNFT } from "@/hooks/usePurchaseNFT";
+import { purchaseNFT as purchaseNFTTx } from "@/utils/kioskTransactions";
+import { useKioskClient } from "@/components/providers/KioskClientProvider";
+import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
+import { SUI_CHAIN } from "@/utils/transactions";
 
 interface SpaceDetailProps {
   space?: {
@@ -46,6 +49,9 @@ interface SpaceDetailProps {
 export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailProps) {
   const router = useRouter();
   const currentAccount = useCurrentAccount();
+  const kioskClient = useKioskClient();
+  const suiClient = useSuiClient();
+  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
 
   // Safety check for missing data when not loading
   if (!isLoading && !space) return null;
@@ -72,7 +78,6 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
 
   const { isMobile } = useResponsive();
   const { isSubscribed, identityId, setIsSubscribed } = useSpaceSubscription(safeSpace.kioskId);
-  const { purchaseNFT, isPurchasing } = usePurchaseNFT();
   
   // Check if current user is the space creator
   const isCreator = currentAccount?.address 
@@ -260,36 +265,54 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
 
   const handlePurchase = async (nftId: string, nftType: string, price: string) => {
     if (!currentAccount) {
-      alert('Please connect your wallet first');
-      return;
+      throw new Error('Please connect your wallet first');
+    }
+
+    if (!kioskClient) {
+      throw new Error('Kiosk client not initialized. Please refresh the page.');
     }
 
     const defaultKioskId = localStorage.getItem('atrium_default_kiosk_id');
-    const defaultKioskCapId = localStorage.getItem('atrium_default_kiosk_cap_id');
+    const sellerKioskId = safeSpace.marketplaceKioskId || safeSpace.kioskId;
     
-    if (!defaultKioskId || !defaultKioskCapId) {
-      alert('Please set a default kiosk in settings first');
-      return;
-    }
-
-    const confirm = window.confirm(
-      `Purchase this NFT for ${(parseInt(price) / 1000000000).toFixed(2)} SUI?`
-    );
-    
-    if (!confirm) return;
+    console.log('🛒 Purchase attempt:', {
+      nftId,
+      nftType,
+      price,
+      buyerAddress: currentAccount.address,
+      buyerKioskId: defaultKioskId || '(will use first available)',
+      sellerKioskId,
+      kioskClient: !!kioskClient,
+    });
 
     try {
-      await purchaseNFT(
-        safeSpace.marketplaceKioskId || safeSpace.kioskId,
+      const tx = await purchaseNFTTx(
+        sellerKioskId,
         nftId,
         nftType,
-        price,
+        BigInt(price),
         defaultKioskId,
-        defaultKioskCapId
+        kioskClient,
+        currentAccount.address
       );
-      alert('Purchase successful!');
+
+      console.log('📝 Transaction built successfully, executing...');
+      
+      await signAndExecute(
+        { transaction: tx, chain: SUI_CHAIN },
+        {
+          onSuccess: () => {
+            console.log('✅ Purchase successful!');
+          },
+          onError: (error) => {
+            console.error('❌ Transaction execution failed:', error);
+            throw error;
+          },
+        }
+      );
     } catch (err: any) {
-      alert(`Purchase failed: ${err.message}`);
+      console.error('❌ Purchase error:', err);
+      throw new Error(err.message || 'Purchase failed');
     }
   };
 
@@ -327,7 +350,6 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
               setIsSubscribed(true);
               setActiveTab("merch");
               setIsContentMenuOpen(false);
-              // Refetch auth token to get subscription NFT
               refetchAuthToken();
             }}
             onUnlock={(itemId) => {
@@ -338,6 +360,8 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
               handleViewContent(itemId);
               setIsContentMenuOpen(false);
             }}
+            onViewIn3D={handleViewIn3D}
+            onPurchase={handlePurchase}
             onJoinAtrium={() => {
               handleJoinAtrium();
               setIsContentMenuOpen(false);

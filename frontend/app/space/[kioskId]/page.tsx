@@ -36,6 +36,7 @@ export default function SpacePage() {
   const spaceProps = space ? {
     id: space.id,
     kioskId: space.marketplaceKioskId,
+    marketplaceKioskId: space.marketplaceKioskId,
     name: space.name,
     description: space.description,
     coverImage: space.coverImage,

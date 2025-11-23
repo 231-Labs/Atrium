@@ -20,7 +20,7 @@ import { useSpaceEditor } from '@/hooks/useSpaceEditor';
 import { useSpace } from '@/hooks/useSpace';
 import { useKioskManagement } from '@/hooks/useKioskManagement';
 import { useMarketplaceKioskCap } from '@/hooks/useMarketplaceKioskCap';
-import { serializeConfig, uploadConfigToWalrus, SpaceScreenConfig } from '@/utils/spaceConfig';
+import { serializeConfig, uploadConfigToWalrus, downloadConfigFromWalrus, configToSceneObjects, SpaceScreenConfig } from '@/utils/spaceConfig';
 import { updateSpaceConfig, SUI_CHAIN, MIST_PER_SUI } from '@/utils/transactions';
 import { listNFT, delistNFT } from '@/utils/kioskTransactions';
 import { ObjectTransform } from '@/types/spaceEditor';
@@ -118,6 +118,47 @@ export function SpacePreviewWindow() {
     }
   }, [viewMode, activeEditTab]);
 
+  // Load config from Walrus when space is selected
+  React.useEffect(() => {
+    if (!selectedSpace?.configQuilt || !isEditMode) {
+      return;
+    }
+    
+    const loadConfig = async () => {
+      try {
+        console.log('📥 Loading config from Walrus:', selectedSpace.configQuilt);
+        const config = await downloadConfigFromWalrus(selectedSpace.configQuilt);
+        const configObjects = configToSceneObjects(config);
+        
+        const editorObjects = configObjects
+          .map(obj => {
+            const nft = nfts.find(n => n.id === obj.nftId);
+            if (!obj.nftId) return null;
+            
+            return {
+              id: obj.nftId,
+              nftId: obj.nftId,
+              objectType: obj.objectType!,
+              name: nft?.name || 'NFT Object',
+              thumbnail: nft?.imageUrl || '',
+              transform: obj.transform!,
+              visible: obj.visible!,
+            };
+          })
+          .filter((obj): obj is NonNullable<typeof obj> => obj !== null);
+        
+        console.log('✅ Loaded config objects:', editorObjects);
+        if (editorObjects.length > 0) {
+          setObjects(editorObjects);
+        }
+      } catch (error) {
+        console.error('❌ Failed to load config:', error);
+      }
+    };
+    
+    loadConfig();
+  }, [selectedSpace?.configQuilt, isEditMode, nfts]);
+
   const handleCreateSpace = () => {
     setIsCreatingSpace(true);
   };
@@ -201,8 +242,20 @@ export function SpacePreviewWindow() {
     try {
       setIsSaving(true);
       
-      const config = serializeConfig(getAllObjects());
+      const objects = getAllObjects();
+      console.log('📦 Saving objects:', objects);
+      
+      if (objects.length === 0) {
+        alert('No objects to save. Please add some NFTs to the scene first.');
+        return;
+      }
+      
+      const config = serializeConfig(objects);
+      console.log('📝 Serialized config:', config);
+      
+      console.log('☁️ Uploading to Walrus...');
       const blobId = await uploadConfigToWalrus(config);
+      console.log('✅ Uploaded, blob ID:', blobId);
 
       const tx = updateSpaceConfig(
         selectedSpace.spaceId,
@@ -210,22 +263,27 @@ export function SpacePreviewWindow() {
         { newConfigQuilt: blobId }
       );
 
-      signAndExecute(
+      await signAndExecute(
         { transaction: tx, chain: SUI_CHAIN },
         {
           onSuccess: () => {
+            console.log('✅ Configuration saved to blockchain!');
             alert('Configuration saved!');
             refetch();
           },
           onError: (err) => {
-            console.error('Save failed:', err);
-            alert('Failed to save configuration');
+            console.error('❌ Transaction failed:', err);
+            alert('Failed to save configuration to blockchain');
           },
         }
       );
     } catch (err: any) {
-      console.error('Save error:', err);
-      alert(`Error: ${err.message}`);
+      console.error('❌ Save error:', {
+        message: err.message,
+        stack: err.stack,
+        error: err
+      });
+      alert(`Error: ${err.message || 'Unknown error'}`);
     } finally {
       setIsSaving(false);
     }
