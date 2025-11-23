@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { ThreeScene } from "@/components/3d/ThreeScene";
@@ -11,21 +11,29 @@ import { LandingPageView } from "./LandingPageView";
 import { SpaceDetailSidebar } from "./SpaceDetailSidebar";
 import { SpaceDetailMobileNav } from "./SpaceDetailMobileNav";
 import { getAccessStatus } from "../ui";
+import { Model3DItem, ThreeSceneApi } from "@/types/three";
+import { getWalrusBlobUrl } from "@/config/walrus";
 
-// Hooks
-import { useContentWindows } from "@/hooks/useContentWindows";
+import { useContentWindows } from "@/components/windows/hooks/useContentWindows";
 import { useResponsive } from "@/hooks/useResponsive";
-import { useSpaceSubscription } from "@/hooks/useSpaceSubscription";
-import { useSpaceViewMode } from "@/hooks/useSpaceViewMode";
-import { useSpaceContent } from "@/hooks/useSpaceContent";
-import { useSpaceAuthToken } from "@/hooks/useSpaceAuthToken";
+import { useSpaceSubscription } from "../hooks/useSpaceSubscription";
+import { useSpaceViewMode } from "../hooks/useSpaceViewMode";
+import { useSpaceContent } from "../hooks/useSpaceContent";
+import { useSpaceAuthToken } from "../hooks/useSpaceAuthToken";
+import { useSpaceConfig } from "../hooks/useSpaceConfig";
+import { useKioskManagement } from "../nft/hooks/useKioskManagement";
+import { purchaseNFT as purchaseNFTTx } from "@/utils/kioskTransactions";
+import { useKioskClient } from "@/components/providers/KioskClientProvider";
+import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
+import { SUI_CHAIN } from "@/utils/transactions";
 
 interface SpaceDetailProps {
   space?: {
     id: string;
     kioskId: string;
     kioskCapId?: string;
-    ownershipId?: string;  // SpaceOwnership NFT ID for PTB
+    ownershipId?: string;
+    marketplaceKioskId?: string;
     name: string;
     description: string;
     coverImage: string;
@@ -41,6 +49,9 @@ interface SpaceDetailProps {
 export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailProps) {
   const router = useRouter();
   const currentAccount = useCurrentAccount();
+  const kioskClient = useKioskClient();
+  const suiClient = useSuiClient();
+  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
 
   // Safety check for missing data when not loading
   if (!isLoading && !space) return null;
@@ -49,6 +60,7 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
   const safeSpace = space || {
     id: spaceId || "",
     kioskId: spaceId || "",
+    marketplaceKioskId: "",
     name: "Loading Space...",
     description: "Please wait while we load the space content.",
     coverImage: "",
@@ -62,8 +74,8 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
   const [activeTab, setActiveTab] = useState<"merch" | "video" | "essay" | "subscribe">("merch");
   const [isContentMenuOpen, setIsContentMenuOpen] = useState(false);
   const [showSubscribeForm, setShowSubscribeForm] = useState(false);
+  const threeSceneRef = useRef<ThreeSceneApi>(null);
 
-  // Custom Hooks
   const { isMobile } = useResponsive();
   const { isSubscribed, identityId, setIsSubscribed } = useSpaceSubscription(safeSpace.kioskId);
   
@@ -94,12 +106,49 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
   const { viewMode, weatherMode, setViewMode, setWeatherMode } = useSpaceViewMode(isCreator ? 'landing' : '3d');
   const { openEssay, openVideo, renderWindows } = useContentWindows();
   const { contentItems: displayItems } = useSpaceContent(safeSpace.id);
+  const { config: spaceConfig } = useSpaceConfig(safeSpace.configQuilt);
+  const { nfts } = useKioskManagement({
+    kioskId: safeSpace.marketplaceKioskId || space?.marketplaceKioskId || null,
+    enabled: !!(safeSpace.marketplaceKioskId || space?.marketplaceKioskId),
+  });
+
+  const visibleModels = useMemo<Model3DItem[]>(() => {
+    if (!spaceConfig || !nfts.length) return [];
+
+    return spaceConfig.objects
+      .filter(obj => obj.visible)
+      .map(obj => {
+        const nft = nfts.find(n => n.id === obj.nftId);
+        if (!nft || (!nft.glbFile && !nft.imageUrl)) return null;
+
+        const modelUrl = nft.glbFile ? getWalrusBlobUrl(nft.glbFile) : nft.imageUrl!;
+
+        return {
+          id: obj.nftId,
+          name: obj.nftId,
+          modelUrl,
+          is2D: obj.objectType === '2d',
+          position: {
+            x: obj.position[0],
+            y: obj.position[1],
+            z: obj.position[2],
+          },
+          rotation: {
+            x: obj.rotation[0],
+            y: obj.rotation[1],
+            z: obj.rotation[2],
+          },
+          scale: {
+            x: obj.scale,
+            y: obj.scale,
+            z: obj.scale,
+          },
+        } as Model3DItem;
+      })
+      .filter((m): m is Model3DItem => m !== null);
+  }, [spaceConfig, nfts]);
 
   const accessStatus = getAccessStatus(currentAccount, hasAccess, isCreator);
-
-  const handleEditSpace = () => {
-    router.push(`/space/${safeSpace.id}/edit`);
-  };
 
   // Define tabs based on user status
   const contentTabs = [
@@ -199,6 +248,74 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
     }
   };
 
+  const handleViewIn3D = (nftId: string) => {
+    if (!spaceConfig) return;
+
+    const nftConfig = spaceConfig.objects.find(obj => obj.nftId === nftId);
+    if (!nftConfig) return;
+
+    setViewMode('3d');
+    
+    setTimeout(() => {
+      if (threeSceneRef.current?.canvas) {
+        const scene = threeSceneRef.current.canvas;
+      }
+    }, 500);
+  };
+
+  const handlePurchase = async (nftId: string, nftType: string, price: string) => {
+    if (!currentAccount) {
+      throw new Error('Please connect your wallet first');
+    }
+
+    if (!kioskClient) {
+      throw new Error('Kiosk client not initialized. Please refresh the page.');
+    }
+
+    const defaultKioskId = localStorage.getItem('atrium_default_kiosk_id');
+    const sellerKioskId = safeSpace.marketplaceKioskId || safeSpace.kioskId;
+    
+    console.log('🛒 Purchase attempt:', {
+      nftId,
+      nftType,
+      price,
+      buyerAddress: currentAccount.address,
+      buyerKioskId: defaultKioskId || '(will use first available)',
+      sellerKioskId,
+      kioskClient: !!kioskClient,
+    });
+
+    try {
+      const tx = await purchaseNFTTx(
+        sellerKioskId,
+        nftId,
+        nftType,
+        BigInt(price),
+        defaultKioskId,
+        kioskClient,
+        currentAccount.address
+      );
+
+      console.log('📝 Transaction built successfully, executing...');
+      
+      await signAndExecute(
+        { transaction: tx, chain: SUI_CHAIN },
+        {
+          onSuccess: () => {
+            console.log('✅ Purchase successful!');
+          },
+          onError: (error) => {
+            console.error('❌ Transaction execution failed:', error);
+            throw error;
+          },
+        }
+      );
+    } catch (err: any) {
+      console.error('❌ Purchase error:', err);
+      throw new Error(err.message || 'Purchase failed');
+    }
+  };
+
 
   return (
     <div className="h-screen bg-gray-100 flex flex-col overflow-hidden" style={{ fontFamily: 'Georgia, serif' }}>
@@ -233,7 +350,6 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
               setIsSubscribed(true);
               setActiveTab("merch");
               setIsContentMenuOpen(false);
-              // Refetch auth token to get subscription NFT
               refetchAuthToken();
             }}
             onUnlock={(itemId) => {
@@ -244,6 +360,8 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
               handleViewContent(itemId);
               setIsContentMenuOpen(false);
             }}
+            onViewIn3D={handleViewIn3D}
+            onPurchase={handlePurchase}
             onJoinAtrium={() => {
               handleJoinAtrium();
               setIsContentMenuOpen(false);
@@ -274,6 +392,8 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
             onShowSubscribeForm={setShowSubscribeForm}
             onUnlock={handleUnlockContent}
             onView={handleViewContent}
+            onViewIn3D={handleViewIn3D}
+            onPurchase={handlePurchase}
             onJoinAtrium={handleJoinAtrium}
           />
         )}
@@ -337,7 +457,9 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
           {viewMode === '3d' ? (
             <RetroFrameCanvas className="bg-gray-100">
               <ThreeScene
+                ref={threeSceneRef}
                 spaceId={safeSpace.id}
+                models={visibleModels}
                 enableGallery={true}
                 weatherMode={weatherMode}
                 onWeatherModeChange={setWeatherMode}
@@ -358,15 +480,11 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
                 // Refetch auth token to get subscription NFT
                 refetchAuthToken();
               }}
-              // onUpload is intentionally not passed - SpaceDetail is read-only view for all users
-              // Upload functionality is only available in SpacePreviewWindow (creator's edit mode)
             />
           )}
 
         </div>
       </div>
-
-      {/* Content Upload is not available in SpaceDetail - only in SpacePreviewWindow */}
     </div>
   );
 }

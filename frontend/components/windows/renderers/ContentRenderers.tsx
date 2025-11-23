@@ -4,19 +4,20 @@
  */
 
 import React from 'react';
+import { MarkdownRenderer } from '@/components/common/MarkdownRenderer';
 
 /**
- * Text/Essay Renderer
+ * Text/Essay Renderer - 使用 MarkdownRenderer 正確解析 Markdown
  */
 export const TextRenderer: React.FC<{ content: string; title: string }> = ({ content, title }) => {
   return (
-    <div className="w-full h-full bg-white overflow-y-auto scrollbar-hidden p-8 font-serif">
-      <article className="prose prose-slate max-w-none">
-        <h1 className="mb-8 text-3xl font-bold text-gray-900">{title}</h1>
-        <div className="whitespace-pre-wrap font-serif text-lg leading-relaxed text-gray-800">
-          {content}
-        </div>
-      </article>
+    <div className="w-full h-full bg-white overflow-y-auto scrollbar-hidden p-8">
+      <MarkdownRenderer 
+        content={content} 
+        title={title}
+        showTitle={true}
+        className="h-full"
+      />
     </div>
   );
 };

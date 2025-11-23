@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useSpace } from "@/hooks/useSpace";
+import { useSpace } from "@/components/space/hooks/useSpace";
 import { SpaceDetail } from "@/components/space/display";
 import { RetroPanel } from "@/components/common/RetroPanel";
 import { RetroButton } from "@/components/common/RetroButton";
@@ -36,6 +36,7 @@ export default function SpacePage() {
   const spaceProps = space ? {
     id: space.id,
     kioskId: space.marketplaceKioskId,
+    marketplaceKioskId: space.marketplaceKioskId,
     name: space.name,
     description: space.description,
     coverImage: space.coverImage,

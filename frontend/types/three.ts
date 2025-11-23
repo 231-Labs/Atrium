@@ -56,6 +56,8 @@ export interface ThreeSceneApi {
   updateModelPosition: (modelId: string, position: { x: number; y: number; z: number }) => void;
   updateModelRotation: (modelId: string, rotation: { x: number; y: number; z: number }) => void;
   updateModelScale: (modelId: string, scale: { x: number; y: number; z: number }) => void;
+  updateFloatingIslandBaseStyle: (subscriberCount: number) => void;
+  updateAudienceSeats: (subscriberCount: number, maxDisplay?: number) => void;
   loadedModels: Array<{ id: string; model: THREE.Group }>;
   canvas: HTMLCanvasElement | null;
 }

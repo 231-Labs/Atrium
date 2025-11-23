@@ -3,13 +3,15 @@
 import { RetroButton } from "@/components/common/RetroButton";
 import { RetroPanel } from "@/components/common/RetroPanel";
 import { ContentList, ContentItemData } from "../content";
+import { MerchList } from "../nft";
 import { SubscribeButton } from "@/components/subscription/SubscribeButton";
 
 interface SpaceDetailMobileNavProps {
   space: {
-    id: string; // Space object ID
+    id: string;
     kioskId: string;
     kioskCapId?: string;
+    marketplaceKioskId?: string;
     creator: string;
     subscriptionPrice: string;
   };
@@ -25,6 +27,8 @@ interface SpaceDetailMobileNavProps {
   onSubscribed: () => void;
   onUnlock: (itemId: string) => void;
   onView: (itemId: string) => void;
+  onViewIn3D?: (nftId: string) => void;
+  onPurchase: (nftId: string, nftType: string, price: string) => void;
   onJoinAtrium: () => void;
 }
 
@@ -42,6 +46,8 @@ export function SpaceDetailMobileNav({
   onSubscribed,
   onUnlock,
   onView,
+  onViewIn3D,
+  onPurchase,
   onJoinAtrium,
 }: SpaceDetailMobileNavProps) {
   return (
@@ -86,14 +92,31 @@ export function SpaceDetailMobileNav({
                   </RetroButton>
                 </div>
               ) : (
-                <ContentList
-                  items={displayItems}
-                  type={activeTab as "merch" | "video" | "essay"}
-                  isSubscribed={isSubscribed}
-                  isCreator={isCreator}
-                  onUnlock={onUnlock}
-                  onView={onView}
-                />
+                <>
+                  {activeTab === 'merch' ? (
+                    space.marketplaceKioskId ? (
+                      <MerchList
+                        kioskId={space.marketplaceKioskId}
+                        onViewIn3D={onViewIn3D}
+                        onPurchase={onPurchase}
+                      />
+                    ) : (
+                      <div className="text-center py-8">
+                        <div className="text-3xl mb-2 opacity-30">🛍️</div>
+                        <p className="text-xs text-gray-500 font-serif">No marketplace available</p>
+                      </div>
+                    )
+                  ) : (
+                    <ContentList
+                      items={displayItems}
+                      type={activeTab as "merch" | "video" | "essay"}
+                      isSubscribed={isSubscribed}
+                      isCreator={isCreator}
+                      onUnlock={onUnlock}
+                      onView={onView}
+                    />
+                  )}
+                </>
               )}
             </div>
           </div>

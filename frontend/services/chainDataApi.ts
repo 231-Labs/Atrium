@@ -27,6 +27,15 @@ export interface GlobalMarketData {
 }
 
 /**
+ * Fear and Greed Index data
+ */
+export interface FearGreedIndex {
+  value: number; // 0-100
+  valueClassification: 'Extreme Fear' | 'Fear' | 'Neutral' | 'Greed' | 'Extreme Greed';
+  timestamp: number;
+}
+
+/**
  * Trending coin data
  */
 export interface TrendingCoin {
@@ -44,6 +53,7 @@ export interface ChainDataSnapshot {
   wal: CryptoPrice; // Walrus Protocol
   globalMarket?: GlobalMarketData;
   trending?: TrendingCoin[];
+  fearGreedIndex?: FearGreedIndex;
   timestamp: number;
   aggregatedMetrics: {
     averageChange: number; // Weighted average change (SUI > WAL > BTC > ETH)
@@ -51,12 +61,14 @@ export interface ChainDataSnapshot {
     marketSentiment: 'bullish' | 'bearish' | 'neutral'; // Market sentiment
     marketActivity: 'high' | 'medium' | 'low'; // Market activity level
     trendingStrength: number; // Trending strength 0-10
+    fearGreedValue?: number; // Fear and Greed Index value (0-100)
   };
 }
 
 class ChainDataApiService {
   private COINGECKO_API = 'https://api.coingecko.com/api/v3';
   private PRICE_CHANGE_API = 'https://api.coinbase.com/v2/prices';
+  private FEAR_GREED_API = 'https://api.alternative.me/fng/';
   private cache: ChainDataSnapshot | null = null;
   private cacheExpiry: number = 0;
   private CACHE_DURATION = 5 * 60 * 1000; // 5-minute cache
@@ -122,6 +134,41 @@ class ChainDataApiService {
   }
 
   /**
+   * Fetch Fear and Greed Index from Alternative.me
+   */
+  private async fetchFearGreedIndex(): Promise<FearGreedIndex | undefined> {
+    try {
+      const url = `${this.FEAR_GREED_API}?limit=1`;
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        console.warn('⚠️ Failed to fetch Fear and Greed Index');
+        return undefined;
+      }
+
+      const result = await response.json();
+      const data = result.data?.[0];
+      
+      if (!data) {
+        return undefined;
+      }
+
+      const value = parseInt(data.value, 10);
+      const classification = data.value_classification as FearGreedIndex['valueClassification'];
+      const timestamp = parseInt(data.timestamp, 10) * 1000; // Convert to milliseconds
+
+      return {
+        value,
+        valueClassification: classification,
+        timestamp,
+      };
+    } catch (error) {
+      console.warn('⚠️ Error fetching Fear and Greed Index:', error);
+      return undefined;
+    }
+  }
+
+  /**
    * Fetch cryptocurrency prices from CoinGecko
    */
   private async fetchFromCoinGecko(): Promise<ChainDataSnapshot> {
@@ -179,10 +226,11 @@ class ChainDataApiService {
         timestamp: Date.now(),
       };
 
-      // Fetch global market and trending coins data in parallel
-      const [globalMarket, trending] = await Promise.all([
+      // Fetch global market, trending coins, and Fear & Greed Index in parallel
+      const [globalMarket, trending, fearGreedIndex] = await Promise.all([
         this.fetchGlobalMarketData(),
         this.fetchTrendingCoins(),
+        this.fetchFearGreedIndex(),
       ]);
 
       // Weighted average calculation: SUI (40%) > WAL (30%) > BTC (20%) > ETH (10%)
@@ -212,6 +260,7 @@ class ChainDataApiService {
         wal,
         globalMarket,
         trending,
+        fearGreedIndex,
         timestamp: Date.now(),
         aggregatedMetrics: {
           averageChange,
@@ -219,6 +268,7 @@ class ChainDataApiService {
           marketSentiment,
           marketActivity,
           trendingStrength,
+          fearGreedValue: fearGreedIndex?.value,
         },
       };
 
@@ -230,6 +280,7 @@ class ChainDataApiService {
         sentiment: marketSentiment,
         activity: marketActivity,
         trending: trendingStrength,
+        fearGreed: fearGreedIndex ? `${fearGreedIndex.value} (${fearGreedIndex.valueClassification})` : 'N/A',
       });
 
       return snapshot;

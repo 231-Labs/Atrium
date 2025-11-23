@@ -19,7 +19,7 @@ export function buildSceneGenerationPrompt(
     randomEvent: TimeBasedEvent | null;
   }
 ): string {
-  const { btc, eth, sui, wal, aggregatedMetrics, globalMarket, trending } = chainData;
+  const { btc, eth, sui, wal, aggregatedMetrics, globalMarket, trending, fearGreedIndex } = chainData;
   
   let marketDataSection = `**Current Market Data (Weather Influence Weight: SUI 40% > WAL 30% > BTC 20% > ETH 10%):**
 - SUI (Primary): $${sui.price.toFixed(4)}, 24h change: ${sui.priceChange24h.toFixed(2)}%, volume: $${(sui.volume24h / 1e9).toFixed(2)}B
@@ -42,6 +42,17 @@ export function buildSceneGenerationPrompt(
 
   if (trending && trending.length > 0) {
     marketDataSection += `\n- Trending coins: ${trending.map(c => `${c.symbol} (${c.priceChangePercentage24h.toFixed(1)}%)`).join(', ')}`;
+  }
+  
+  // Add Fear and Greed Index if available
+  if (fearGreedIndex) {
+    marketDataSection += `\n- **Fear & Greed Index**: ${fearGreedIndex.value}/100 (${fearGreedIndex.valueClassification})`;
+    marketDataSection += `\n  💡 Use this to influence weather mood:`;
+    marketDataSection += `\n    - Extreme Fear (0-24): Dark, stormy, mysterious weather`;
+    marketDataSection += `\n    - Fear (25-44): Cloudy, rainy, melancholic`;
+    marketDataSection += `\n    - Neutral (45-55): Balanced, calm weather`;
+    marketDataSection += `\n    - Greed (56-75): Bright, sunny, energetic`;
+    marketDataSection += `\n    - Extreme Greed (76-100): Very bright, celebratory, maximum effects`;
   }
   
   // Calculate total volume for fish count suggestion
@@ -96,6 +107,11 @@ ${timeFactorsSection}
    - Strong Bear (<-5%): stormy (MUST use extremely dark colors: sky #2F4F4F or darker, water #1C2841)
    - High Volatility (>8): foggy
    - Special conditions: snowy (rare, extreme cold market)
+   - **FEAR & GREED INFLUENCE**: If Fear & Greed Index is available:
+     * Extreme Fear (0-24): Override to stormy/foggy with dark colors
+     * Fear (25-44): Prefer rainy/cloudy
+     * Extreme Greed (76-100): Override to sunny with maximum brightness
+     * Greed (56-75): Prefer sunny/cloudy with bright colors
    - **OVERRIDE**: If special date event suggests specific weather, prioritize it!
 
 2. **Market Activity Influence**:

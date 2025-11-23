@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSuiClient } from '@mysten/dapp-kit';
 import { PACKAGE_ID } from '@/config/sui';
+import { fetchCategoryFromConfig } from '@/utils/configHelpers';
 
 export interface SpaceData {
   id: string;
@@ -40,13 +41,11 @@ export function useSpaces() {
 
       console.log('📊 Found space events:', events.data.length);
 
-      // Extract space IDs from events and fetch their current state
       const spaceDataPromises = events.data.map(async (event: any) => {
         try {
           const spaceId = event.parsedJson?.space_id;
           if (!spaceId) return null;
 
-          // Fetch the Space object
           const spaceObject = await suiClient.getObject({
             id: spaceId,
             options: { showContent: true }
@@ -57,17 +56,19 @@ export function useSpaces() {
           }
 
           const fields = (spaceObject.data.content as any).fields;
+          const configQuilt = fields.config_quilt || fields.config_quilt_blob_id || '';
+          const category = await fetchCategoryFromConfig(configQuilt);
           
           return {
             id: spaceId,
             name: fields.name || 'Untitled Space',
             description: fields.description || '',
-            coverImage: fields.cover_image || fields.cover_image_blob_id || '',  // Try both field names
-            configQuilt: fields.config_quilt || fields.config_quilt_blob_id || '',
+            coverImage: fields.cover_image || fields.cover_image_blob_id || '',
+            configQuilt,
             subscriptionPrice: fields.subscription_price || '0',
             creator: fields.creator || '',
             marketplaceKioskId: fields.marketplace_kiosk_id || '',
-            category: 'other', // Default category, could be stored in dynamic fields
+            category,
           } as SpaceData;
         } catch (err) {
           console.error('Failed to fetch space:', err);

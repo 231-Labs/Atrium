@@ -8,8 +8,8 @@ import { ExplorerLink } from '@/components/common/ExplorerLink';
 import { useState, useEffect } from 'react';
 import { bindAvatar, updateImage, updateBio } from '@/utils/transactions';
 import { uploadBlobToWalrus } from '@/services/walrusApi';
-import { useKioskData } from '@/hooks/useKioskData';
-import { useIdentity } from '@/hooks/useIdentity';
+import { useKioskData } from '@/components/space/nft/hooks/useKioskData';
+import { useIdentity } from '@/components/identity/hooks/useIdentity';
 import { getIdentityImageBlobId } from '@/utils/identity-helpers';
 import dynamic from 'next/dynamic';
 
@@ -38,15 +38,26 @@ export function SettingsPage() {
     const savedKioskId = localStorage.getItem('atrium_default_kiosk_id');
     if (savedKioskId && !selectedKioskId) {
       setSelectedKioskId(savedKioskId);
+      
+      const savedKiosk = ownedKiosks?.find(k => k.kioskId === savedKioskId);
+      if (savedKiosk) {
+        localStorage.setItem('atrium_default_kiosk_cap_id', savedKiosk.objectId);
+      }
     }
-  }, [selectedKioskId, setSelectedKioskId]);
+  }, [selectedKioskId, setSelectedKioskId, ownedKiosks]);
 
   const handleKioskChange = (kioskId: string) => {
     setSelectedKioskId(kioskId);
     if (kioskId) {
       localStorage.setItem('atrium_default_kiosk_id', kioskId);
+      
+      const selectedKiosk = ownedKiosks?.find(k => k.kioskId === kioskId);
+      if (selectedKiosk) {
+        localStorage.setItem('atrium_default_kiosk_cap_id', selectedKiosk.objectId);
+      }
     } else {
       localStorage.removeItem('atrium_default_kiosk_id');
+      localStorage.removeItem('atrium_default_kiosk_cap_id');
     }
   };
 

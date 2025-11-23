@@ -1,9 +1,9 @@
 "use client";
 
 import * as THREE from 'three';
-import { useThreeScene } from '@/hooks/three/useThreeScene';
-import { useAIWeather } from '@/hooks/useAIWeather';
-import { useSpaceSubscribers } from '@/hooks/useSpaceSubscribers';
+import { useThreeScene } from './hooks/useThreeScene';
+import { useAIWeather } from './hooks/useAIWeather';
+import { useSpaceSubscribers } from '@/components/space/hooks/useSpaceSubscribers';
 import { timeFactors } from '@/services/timeFactors';
 import { Model3DItem, ThreeSceneApi } from '@/types/three';
 import { WeatherMode, STAGE_THEMES, STATIC_WEATHER_CONFIGS } from '@/types/theme';
@@ -91,6 +91,7 @@ export const ThreeScene = forwardRef<ThreeSceneApi, ThreeSceneProps>(({
     getSceneState,
     playIntroAnimation,
     setTransformCallbacks,
+    updateFloatingIslandBaseStyle,
     updateAudienceSeats,
     getAudienceSeatPositions,
   } = useThreeScene(sceneOptions);
@@ -135,6 +136,12 @@ export const ThreeScene = forwardRef<ThreeSceneApi, ThreeSceneProps>(({
     updateModelScale: (modelId: string, scale: { x: number; y: number; z: number }) => {
       sceneManager?.updateModelScale(modelId, scale);
     },
+    updateFloatingIslandBaseStyle: (subscriberCount: number) => {
+      updateFloatingIslandBaseStyle(subscriberCount);
+    },
+    updateAudienceSeats: (subscriberCount: number, maxDisplay: number = 50) => {
+      updateAudienceSeats(subscriberCount, maxDisplay);
+    },
     loadedModels: loadedModelsArray,
     canvas: canvasRef.current
   }));
@@ -145,7 +152,6 @@ export const ThreeScene = forwardRef<ThreeSceneApi, ThreeSceneProps>(({
     chainData, 
     isLoading: weatherLoading, 
     refreshWeather, 
-    lastUpdate,
     error: weatherError 
   } = useAIWeather({
     autoUpdate: isDynamicMode,
@@ -352,6 +358,25 @@ export const ThreeScene = forwardRef<ThreeSceneApi, ThreeSceneProps>(({
     weatherMode,
     isDynamicNight,
   ]);
+
+  // Update floating island base style based on subscriber count
+  // This runs independently of subscriber avatar display logic
+  useEffect(() => {
+    if (!sceneInitialized || !sceneManager) {
+      return;
+    }
+
+    // Wait for subscriber data to load (or if loading is false, proceed)
+    if (subscribersLoading) {
+      return;
+    }
+
+    // Update the floating island base style when subscriber count changes
+    // This will trigger the style switch at threshold (currently 1)
+    const subscriberCount = subscribers.length;
+    console.log(`🏝️ Updating island base style for ${subscriberCount} subscribers`);
+    updateFloatingIslandBaseStyle(subscriberCount);
+  }, [sceneInitialized, sceneManager, subscribers.length, subscribersLoading, updateFloatingIslandBaseStyle]);
 
   // Helper: Create a floating platform beneath subscriber
   const createFloatingPlatform = (

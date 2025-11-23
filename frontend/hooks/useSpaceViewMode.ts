@@ -7,9 +7,9 @@ type ViewMode = '3d' | 'landing';
  * useSpaceViewMode - Unified view mode management (3D vs Landing)
  * Manages both view mode and weather mode for 3D scenes
  */
-export function useSpaceViewMode(defaultMode: ViewMode = '3d') {
+export function useSpaceViewMode(defaultMode: ViewMode = '3d', defaultWeather: WeatherMode = 'dynamic') {
   const [viewMode, setViewMode] = useState<ViewMode>(defaultMode);
-  const [weatherMode, setWeatherMode] = useState<WeatherMode>('dynamic');
+  const [weatherMode, setWeatherMode] = useState<WeatherMode>(defaultWeather);
 
   const toggleViewMode = () => {
     setViewMode(prev => prev === '3d' ? 'landing' : '3d');

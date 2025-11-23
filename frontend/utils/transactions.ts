@@ -84,18 +84,6 @@ export const updateBio = (identityId: string, bio: string) => {
   return tx;
 };
 
-export const becomeCreator = (identityId: string) => {
-  const tx = new Transaction();
-  tx.moveCall({
-    target: `${PACKAGE_ID}::identity::become_creator`,
-    arguments: [
-      tx.object(IDENTITY_REGISTRY_ID),
-      tx.object(identityId)
-    ],
-  });
-  return tx;
-};
-
 export const initializeSpace = (
   name: string,
   description: string,
@@ -116,6 +104,7 @@ export const initializeSpace = (
     target: `${PACKAGE_ID}::space::initialize_space`,
     arguments: [
       tx.object(SPACE_REGISTRY_ID),
+      tx.object(IDENTITY_REGISTRY_ID),
       tx.pure.string(name),
       tx.pure.string(description),
       tx.pure.string(coverImageBlobId),
@@ -226,26 +215,6 @@ export const updateSpaceConfig = (
   return tx;
 };
 
-// Note: add_fan_avatar is not an entry function in the contract.
-// It is called internally by the subscription::subscribe function.
-// This function is kept for reference but cannot be used directly.
-export const addFanAvatar = (
-  kioskId: string,
-  fanAddress: string,
-  avatarBlobId: string,
-) => {
-  const tx = new Transaction();
-  tx.moveCall({
-    target: `${PACKAGE_ID}::space::add_fan_avatar`,
-    arguments: [
-      tx.object(kioskId),
-      tx.pure.address(fanAddress),
-      tx.pure.string(avatarBlobId),
-    ],
-  });
-  return tx;
-};
-
 export const addVideo = (
   spaceId: string,
   ownershipId: string,
@@ -337,33 +306,34 @@ export const renewSubscription = (
 };
 
 /**
- * Seal approve for content decryption
- * Moved to subscription module to avoid circular dependency
+ * Seal approve for content decryption - Subscriber version
+ * @deprecated This function is not used. Use seal_approve_as_subscriber or seal_approve_as_creator directly in sealContent.ts
  * @param resourceIdBytes - Resource ID as bytes
  * @param spaceId - Space object ID
- * @param subscriptionRegistryId - SubscriptionRegistry object ID
+ * @param subscriptionId - Subscription NFT ID
  */
 export const sealApproveBySubscription = (
   resourceIdBytes: Uint8Array,
   spaceId: string,
-  subscriptionRegistryId: string = SUBSCRIPTION_REGISTRY_ID,
+  subscriptionId: string,
 ) => {
   console.log('🔐 [sealApproveBySubscription] Building transaction with:', {
     resourceIdBytesLength: resourceIdBytes.length,
     resourceIdHex: Array.from(resourceIdBytes).map(b => b.toString(16).padStart(2, '0')).join(''),
     spaceId,
     spaceIdLength: spaceId.length,
-    subscriptionRegistryId,
+    subscriptionId,
     packageId: PACKAGE_ID,
   });
   
   const tx = new Transaction();
   tx.moveCall({
-    target: `${PACKAGE_ID}::subscription::seal_approve`,
+    target: `${PACKAGE_ID}::subscription::seal_approve_as_subscriber`,
     arguments: [
       tx.pure.vector('u8', Array.from(resourceIdBytes)),
       tx.object(spaceId),
-      tx.object(subscriptionRegistryId),
+      tx.object(subscriptionId),  // Subscription NFT
+      tx.object('0x6'),           // Clock object
     ],
   });
   return tx;

@@ -6,19 +6,22 @@ import { RetroButton } from '@/components/common/RetroButton';
 interface WeatherModeToggleProps {
   currentMode: WeatherMode;
   onModeChange: (mode: WeatherMode) => void;
+  showAi?: boolean;
 }
 
-export function WeatherModeToggle({ currentMode, onModeChange }: WeatherModeToggleProps) {
+export function WeatherModeToggle({ currentMode, onModeChange, showAi = true }: WeatherModeToggleProps) {
   return (
     <div className="flex gap-1">
-      <RetroButton
-        onClick={() => onModeChange('dynamic')}
-        variant={currentMode === 'dynamic' ? 'primary' : 'secondary'}
-        size="sm"
-        title="AI Dynamic Weather Mode"
-      >
-        🤖
-      </RetroButton>
+      {showAi && (
+        <RetroButton
+          onClick={() => onModeChange('dynamic')}
+          variant={currentMode === 'dynamic' ? 'primary' : 'secondary'}
+          size="sm"
+          title="AI Dynamic Weather Mode"
+        >
+          🤖
+        </RetroButton>
+      )}
       <RetroButton
         onClick={() => onModeChange('day')}
         variant={currentMode === 'day' ? 'primary' : 'secondary'}

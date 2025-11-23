@@ -209,7 +209,7 @@ export class AtriumGalleryScene {
   // Base style configuration thresholds
   private readonly BASE_STYLE_THRESHOLDS = {
     GEOMETRIC: 0,      // Start with geometric (Monument Valley)
-    LAPUTA: 100,       // Switch to Laputa style at 100 subscribers
+    LAPUTA: 1,         // Switch to Laputa style at 1 subscriber
   };
 
   private currentBaseObject?: THREE.Object3D;
@@ -462,116 +462,202 @@ export class AtriumGalleryScene {
   }
 
   private createLaputaBase(parentGroup: THREE.Group) {
-    // Laputa-inspired floating island base (Castle in the Sky style)
+    // Laputa-inspired floating island base - Premium Geometric Version
     const isNightMode = this.theme.backgroundColor === 0x0f172a || this.theme.backgroundColor === 0x0a0a0f;
 
+    // 1. Premium Materials - Unified with Scene Tone
+    // Using theme.platformColor ensures it matches the original "Atrium" aesthetic (Clean/White in Day)
+    const baseColor = isNightMode ? 0x1e293b : (this.theme.platformColor || 0xe8f4f8);
+    const accentColor = isNightMode ? 0x475569 : (this.theme.platformColor || 0xe8f4f8);
+
     const baseMaterial = new THREE.MeshStandardMaterial({
-      color: isNightMode ? 0x1e293b : 0x6a7b76, // Night: Slate / Day: Mossy Stone
-      roughness: isNightMode ? 0.4 : 0.9, // Night: Metallic / Day: Rough
-      metalness: isNightMode ? 0.7 : 0.1,
-      flatShading: false,
-      emissive: isNightMode ? 0x0f172a : 0x6a7b76, // Night: Deep blue glow
-      emissiveIntensity: 0.1,
+      color: baseColor, 
+      roughness: isNightMode ? 0.6 : 0.2, // Day: Smoother/Glossier like marble/plastic
+      metalness: isNightMode ? 0.3 : 0.1,
+      flatShading: true,
+      emissive: baseColor,
+      emissiveIntensity: isNightMode ? 0.1 : 0.05,
     });
 
     const accentMaterial = new THREE.MeshStandardMaterial({
-      color: isNightMode ? 0x334155 : 0x4a5568, // Night: Lighter Slate / Day: Dark Metal
-      roughness: 0.7,
-      metalness: 0.4,
-      emissive: isNightMode ? 0x1e293b : 0x4a5568,
-      emissiveIntensity: 0.1,
+      color: accentColor,
+      roughness: 0.4,
+      metalness: isNightMode ? 0.6 : 0.3, // Slightly more metallic for accent
+      flatShading: true,
+      emissive: isNightMode ? 0x0f172a : accentColor,
+      emissiveIntensity: isNightMode ? 0.2 : 0.15,
     });
 
-    // 1. Main Hemispherical Body (The massive floating earth/stone chunk)
-    const domeGeometry = new THREE.SphereGeometry(7.8, 32, 24, 0, Math.PI * 2, 0, Math.PI * 0.5); 
-    const dome = new THREE.Mesh(domeGeometry, baseMaterial);
-    dome.rotation.x = Math.PI; // Point down
-    dome.position.y = 0; 
-    dome.scale.set(1, 0.8, 1); // Slightly flattened
-    dome.castShadow = true;
-    dome.receiveShadow = true;
-    parentGroup.add(dome);
+    const glowMaterial = new THREE.MeshBasicMaterial({
+      color: this.theme.rimColor, // Uses theme rim color (Gold/Blue)
+      transparent: true,
+      opacity: 0.6,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    });
 
-    // 2. Concentric Stone Rings/Tiers (The architectural layers)
-    const rings = [
-      { radius: 6, width: 0.8, y: -2 },
-      { radius: 4.5, width: 0.6, y: -4 },
-      { radius: 3, width: 0.5, y: -5.5 },
-    ];
+    // 2. Main Architectural Body (Layered Geometric Structure)
+    
+    // Layer A: Main Platform Support (Inverted Octagonal Frustum)
+    // Top radius 8 (matches platform), Bottom radius 5, Height 4
+    const mainBodyGeo = new THREE.CylinderGeometry(8, 5, 4, 8);
+    const mainBody = new THREE.Mesh(mainBodyGeo, baseMaterial);
+    mainBody.position.y = -2;
+    mainBody.castShadow = true;
+    mainBody.receiveShadow = true;
+    parentGroup.add(mainBody);
 
-    rings.forEach(ring => {
-      const geometry = new THREE.CylinderGeometry(ring.radius, ring.radius * 0.95, ring.width, 32);
-      const mesh = new THREE.Mesh(geometry, accentMaterial);
-      mesh.position.y = ring.y;
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      parentGroup.add(mesh);
+    // Layer B: Secondary Core (Inverted Hexagonal Frustum)
+    // Top radius 4.8, Bottom radius 2, Height 5
+    const midBodyGeo = new THREE.CylinderGeometry(4.8, 2, 5, 6);
+    const midBody = new THREE.Mesh(midBodyGeo, accentMaterial);
+    midBody.position.y = -6.5; // Below main body
+    midBody.rotation.y = Math.PI / 6; // Offset rotation
+    midBody.castShadow = true;
+    midBody.receiveShadow = true;
+    parentGroup.add(midBody);
+
+    // Layer C: Bottom Crystal Cluster (The power source housing)
+    const bottomGeo = new THREE.DodecahedronGeometry(2.5, 0);
+    const bottomMesh = new THREE.Mesh(bottomGeo, baseMaterial);
+    bottomMesh.position.y = -9;
+    bottomMesh.scale.set(1, 1.5, 1);
+    parentGroup.add(bottomMesh);
+
+    // 3. Floating Geometric Halos (The "Light Rings")
+    const ringCount = 3;
+    const baseRadius = 10;
+    
+    for(let i = 0; i < ringCount; i++) {
+      // Create segmented geometric rings instead of perfect torus for style
+      const radius = baseRadius + (i * 2.5);
+      const tube = 0.05 - (i * 0.01); // Thinner as they go out
+      const segments = 6 + (i * 2); // 6, 8, 10 sided rings
       
-      // Add some technological/ancient markings (torus rings)
-      const detailGeo = new THREE.TorusGeometry(ring.radius + 0.1, 0.05, 4, 32);
-      const detailMat = new THREE.MeshBasicMaterial({ 
-        color: this.theme.rimColor, 
-        transparent: true, 
-        opacity: 0.3 
-      });
-      const detail = new THREE.Mesh(detailGeo, detailMat);
-      detail.rotation.x = Math.PI / 2;
-      detail.position.y = ring.y;
-      parentGroup.add(detail);
-      this.animatedElements.push(detail);
-    });
+      const ringGeo = new THREE.TorusGeometry(radius, tube, 4, segments); 
+      // Rotate geometry to be flat initially
+      ringGeo.rotateX(Math.PI / 2);
+      
+      // Clone material for independent animation
+      const ringMat = glowMaterial.clone();
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      
+      // Position rings at different heights around the island
+      ring.position.y = -2 - (i * 1.5);
+      
+      // Add animation data
+      ring.userData = {
+        rotationSpeed: 0.1 + (i * 0.05), // Different speeds
+        rotationAxis: new THREE.Vector3(0, 1, 0), // Rotate around Y
+        isBreathing: true,
+        baseOpacity: 0.4 - (i * 0.1),
+        breathingSpeed: 1.5 + i,
+        breathingRange: 0.2
+      };
+      
+      // Add slight tilt to outer rings
+      if (i > 0) {
+        ring.rotation.x = (Math.random() - 0.5) * 0.2;
+        ring.rotation.z = (Math.random() - 0.5) * 0.2;
+      }
 
-    // 3. The Central Core / Volucite Crystal (The power source)
-    const coreGeometry = new THREE.IcosahedronGeometry(1.5, 0);
-    const coreMaterial = new THREE.MeshStandardMaterial({
-      color: 0x44aadd, // Cyan/Blue crystal
-      emissive: 0x2288cc,
-      emissiveIntensity: 1.5,
+      parentGroup.add(ring);
+      this.animatedElements.push(ring);
+      this.parametricElements.push(ring); // Enable rotation
+    }
+
+    // 4. Vertical Energy Lines (Holographic pillars)
+    const lineCount = 8;
+    for(let i = 0; i < lineCount; i++) {
+      const angle = (i / lineCount) * Math.PI * 2;
+      const r = 7.8; // Just inside the rim
+      
+      const lineGeo = new THREE.BoxGeometry(0.1, 3, 0.1);
+      const lineMat = glowMaterial.clone();
+      const line = new THREE.Mesh(lineGeo, lineMat);
+      
+      line.position.set(
+        Math.cos(angle) * r,
+        -1.5, // Center Y
+        Math.sin(angle) * r
+      );
+      
+      // Animation for lines
+      line.userData = {
+        isBreathing: true,
+        baseOpacity: 0.4,
+        breathingSpeed: 2.0,
+        breathingRange: 0.15
+      };
+      
+      parentGroup.add(line);
+      this.animatedElements.push(line);
+      
+      // Add glowing orb at bottom of line
+      const orbGeo = new THREE.OctahedronGeometry(0.2, 0);
+      const orbMat = glowMaterial.clone();
+      const orb = new THREE.Mesh(orbGeo, orbMat);
+      orb.position.set(
+        Math.cos(angle) * r,
+        -3,
+        Math.sin(angle) * r
+      );
+      
+      orb.userData = {
+        isBreathing: true,
+        baseOpacity: 0.8,
+        breathingSpeed: 3.0,
+        breathingRange: 0.2
+      };
+      
+      parentGroup.add(orb);
+      this.animatedElements.push(orb); 
+    }
+
+    // 5. The Central Power Crystal (Volucite) - Premium
+    const crystalGeo = new THREE.OctahedronGeometry(1.2, 0);
+    const crystalMat = new THREE.MeshStandardMaterial({
+      color: this.theme.rimColor,
+      emissive: this.theme.rimColor,
+      emissiveIntensity: 2.0,
       roughness: 0.1,
-      metalness: 0.9,
+      metalness: 1.0,
       transparent: true,
       opacity: 0.9,
     });
-    const core = new THREE.Mesh(coreGeometry, coreMaterial);
-    core.position.y = -7.5; // At the bottom center
-    parentGroup.add(core);
-    this.animatedElements.push(core); 
-
-    // 4. Surrounding "Root" Structures or Broken Pillars
-    const debrisCount = 12;
-    const debrisGeo = new THREE.ConeGeometry(0.2, 3, 5);
+    const crystal = new THREE.Mesh(crystalGeo, crystalMat);
+    crystal.position.y = -9;
     
-    for(let i=0; i<debrisCount; i++) {
-      const angle = (i / debrisCount) * Math.PI * 2;
-      const radius = 2 + Math.random() * 3;
-      const length = 2 + Math.random() * 4;
-      
-      const mesh = new THREE.Mesh(debrisGeo, baseMaterial);
-      mesh.position.set(
-        Math.cos(angle) * radius,
-        -5 - Math.random() * 2,
-        Math.sin(angle) * radius
-      );
-      mesh.rotation.x = Math.PI; // Point down
-      mesh.rotation.z = (Math.random() - 0.5) * 0.5; // Slight tilt
-      mesh.rotation.y = angle;
-      mesh.scale.y = length / 3;
-      
-      parentGroup.add(mesh);
-    }
+    // Inner light
+    const pointLight = new THREE.PointLight(this.theme.rimColor, 1.0, 15);
+    pointLight.position.y = -9;
+    parentGroup.add(pointLight);
+    this.animatedElements.push(pointLight); // Pulsing light
 
-    // 5. Energy Field (Sphere enclosing the crystal)
-    const fieldGeo = new THREE.SphereGeometry(2.5, 24, 24);
-    const fieldMat = new THREE.MeshBasicMaterial({
-      color: 0x44aadd,
-      transparent: true,
-      opacity: 0.1,
-      wireframe: true,
-    });
-    const field = new THREE.Mesh(fieldGeo, fieldMat);
-    field.position.y = -7.5;
-    parentGroup.add(field);
-    this.animatedElements.push(field);
+    parentGroup.add(crystal);
+    this.animatedElements.push(crystal); // Rotation
+
+    // 6. Floating Debris / Satellite Rocks (Geometric)
+    const debrisCount = 6;
+    const debrisGeo = new THREE.DodecahedronGeometry(0.6, 0); // Low poly rocks
+    
+    for(let i = 0; i < debrisCount; i++) {
+      const angle = (i / debrisCount) * Math.PI * 2 + (Math.random() * 0.5);
+      const r = 6 + Math.random() * 4;
+      const y = -5 - Math.random() * 5;
+      
+      const debris = new THREE.Mesh(debrisGeo, baseMaterial);
+      debris.position.set(Math.cos(angle) * r, y, Math.sin(angle) * r);
+      debris.scale.setScalar(0.5 + Math.random() * 0.8);
+      
+      // Random rotation
+      debris.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
+      
+      parentGroup.add(debris);
+      
+      // Animate orbit? (Maybe simple rotation in update loop if parentGroup rotates, but let's just make them static relative to base for now, or add to animatedElements for local rotation)
+      this.animatedElements.push(debris); // Will use standard mesh rotation from update()
+    }
   }
 
   private createFloatingIslandBase_DEPRECATED() {
@@ -1324,12 +1410,8 @@ export class AtriumGalleryScene {
 
   // Update audience seats to match a specific count
   // Performance optimization: limits display to maxDisplay, randomly sampling if needed
-  updateAudienceSeats(subscriberCount: number, maxDisplay: number = 50) {
+  updateAudienceSeats(subscriberCount: number, maxDisplay: number = 10) {
     const maxSeats = this.audienceSeatPositions.length;
-    
-    // Update island base style based on subscriber count
-    // This adds progression: start with simple geometric base, evolve to Laputa style
-    this.updateFloatingIslandBaseStyle(subscriberCount);
     
     // Determine how many seats to show
     const actualSubscribers = Math.min(subscriberCount, maxSeats);

@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { ThreeScene } from '@/components/3d/ThreeScene';
 import type { SceneWeatherParams } from '@/services/poeApi';
+import type { ThreeSceneApi } from '@/types/three';
 
 const TEST_SCENARIOS: Record<string, SceneWeatherParams> = {
   '🐟 High Volume Market': {
@@ -307,6 +308,32 @@ const TEST_SCENARIOS: Record<string, SceneWeatherParams> = {
     reasoning: 'Test: All Time High celebration!',
     timestamp: Date.now(),
   },
+
+  '🍕 Bitcoin Pizza Day (5/22)': {
+    skyColor: '#FFD700', // Golden yellow - pizza/bitcoin theme
+    fogDensity: 0.05, // Very clear sky for celebration
+    fogColor: '#FFE4B5', // Warm golden fog
+    sunIntensity: 2.0, // Maximum brightness for celebration
+    sunColor: '#FF8C00', // Dark orange - pizza cheese color
+    ambientIntensity: 0.9, // Very bright ambient
+    weatherType: 'sunny',
+    particleIntensity: 0.8, // High particle intensity for "golden rain" effect
+    windSpeed: 4,
+    cloudSpeed: 2.5,
+    mood: 'energetic',
+    waterEffect: 'waves',
+    waterColor: '#FFD700', // Golden water - very distinctive
+    specialEvents: ['rainbow', 'meteor_shower', 'aurora'], // Multiple effects for maximum celebration
+    islandState: 'glowing', // Island glowing with golden light
+    ambientEffects: ['confetti', 'sparkles', 'birds_flying'], // Confetti rain + sparkles for coins
+    effectIntensity: 1.0, // Maximum effect intensity
+    fishCount: 80, // High activity
+    floatingOrbCount: 30, // Maximum orbs
+    energyBeamIntensity: 1.0, // Maximum energy beams
+    rainbowColors: ['#FFD700', '#FF8C00', '#FFA500', '#FFE4B5', '#FFF8DC'], // Golden rainbow colors
+    reasoning: 'Test: Bitcoin Pizza Day - 10,000 BTC for 2 pizzas! Maximum golden celebration with rainbow, meteors, aurora, confetti, and sparkles!',
+    timestamp: Date.now(),
+  },
 };
 
 export default function TestWeatherPage() {
@@ -314,6 +341,8 @@ export default function TestWeatherPage() {
   const [testParams, setTestParams] = useState<SceneWeatherParams>(TEST_SCENARIOS['🐟 High Volume Market']);
   const [showInfo, setShowInfo] = useState(true);
   const [isPanelVisible, setIsPanelVisible] = useState(true);
+  const [subscriberCount, setSubscriberCount] = useState<number>(50);
+  const sceneRef = useRef<ThreeSceneApi>(null);
 
   const handleScenarioChange = (scenario: string) => {
     setSelectedScenario(scenario);
@@ -323,13 +352,34 @@ export default function TestWeatherPage() {
     });
   };
 
+  const handleSubscriberCountChange = (count: number) => {
+    setSubscriberCount(count);
+    // Update the floating island base style based on subscriber count
+    if (sceneRef.current) {
+      sceneRef.current.updateFloatingIslandBaseStyle(count);
+    }
+  };
+
+  // Initialize subscriber count when scene is ready
+  useEffect(() => {
+    // Small delay to ensure scene is fully initialized
+    const timer = setTimeout(() => {
+      if (sceneRef.current) {
+        sceneRef.current.updateFloatingIslandBaseStyle(subscriberCount);
+      }
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [subscriberCount]);
+
   return (
     <div className="relative w-full h-screen">
       <div className="absolute inset-0">
         <ThreeScene
+          ref={sceneRef}
           spaceId="test-weather"
           enableGallery={true}
           weatherParams={testParams}
+          enableSubscriberAvatars={false}
         />
       </div>
 
@@ -360,6 +410,37 @@ export default function TestWeatherPage() {
               ))}
             </select>
           </div>
+
+          <div className="space-y-2 mb-4">
+            <label className="block text-sm font-medium">
+              🏝️ Subscriber count (testing floating island style changes):
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min="0"
+                max="200"
+                value={subscriberCount}
+                onChange={(e) => handleSubscriberCountChange(Number(e.target.value))}
+                className="flex-1"
+              />
+              <input
+                type="number"
+                min="0"
+                max="200"
+                value={subscriberCount}
+                onChange={(e) => handleSubscriberCountChange(Number(e.target.value))}
+                className="w-20 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-center"
+              />
+            </div>
+            <div className="text-xs text-gray-400 mt-1">
+              <p>💡 = 0: Geometric (Monument Valley)</p>
+              <p>💡 ≥ 1: Laputa style (Laputa)</p>
+              <p className="mt-1 font-semibold text-yellow-400">
+                {subscriberCount >= 1 ? '✨ Laputa style enabled!' : '🔷 Geometric style'}
+              </p>
+            </div>
+          </div>  
 
           <button
             onClick={() => setShowInfo(!showInfo)}

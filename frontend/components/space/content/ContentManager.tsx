@@ -5,7 +5,7 @@ import { RetroPanel } from '@/components/common/RetroPanel';
 import { RetroButton } from '@/components/common/RetroButton';
 import { ContentUploadWindow } from './ContentUploadWindow';
 import { StoredContent } from '@/utils/contentStorage';
-import { useContentManagement } from '@/hooks/useContentManagement';
+import { useContentManagement } from './hooks/useContentManagement';
 import { StateContainer } from '@/components/common/StateContainer';
 
 interface ContentManagerProps {

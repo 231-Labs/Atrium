@@ -395,6 +395,13 @@ export class SceneManager {
     this.loadedModels.clear();
   }
 
+  // Update floating island base style based on subscriber count
+  updateFloatingIslandBaseStyle(subscriberCount: number) {
+    if (this.galleryScene) {
+      this.galleryScene.updateFloatingIslandBaseStyle(subscriberCount);
+    }
+  }
+
   // Audience seat management methods
   updateAudienceSeats(subscriberCount: number, maxDisplay: number = 50) {
     if (this.galleryScene) {

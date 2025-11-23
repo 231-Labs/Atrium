@@ -10,8 +10,8 @@ import { getTimeFactors } from '@/services/timeFactors';
 import type { SceneWeatherParams } from '@/services/poeApi';
 
 // Cache config
-// Reduced cache duration for debugging (was 5 * 60 * 1000)
-const CACHE_DURATION = 10 * 1000; // 10 seconds
+// Use 5 minutes cache, but time factors will still vary based on hour/day
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 let cachedWeatherData: {
   data: SceneWeatherParams;
   timestamp: number;
@@ -73,6 +73,8 @@ export async function GET(request: NextRequest) {
       });
       
       const prompt = buildSceneGenerationPrompt(chainData, timeFactors);
+      console.log('📋 Prompt sent to AI (first 500 chars):', prompt.substring(0, 500) + '...');
+      console.log('📋 Full prompt length:', prompt.length, 'characters');
       
       const response = await fetch('https://api.poe.com/v1/chat/completions', {
         method: 'POST',
@@ -89,23 +91,41 @@ export async function GET(request: NextRequest) {
       });
 
       if (!response.ok) {
-        throw new Error(`POE API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ POE API Error Response:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText,
+        });
+        throw new Error(`POE API error: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
       const aiResponse = data.choices?.[0]?.message?.content || '';
       
+      console.log('📝 POE AI Raw Response:', aiResponse);
+      console.log('📊 POE API Response Data:', JSON.stringify(data, null, 2));
+      
       const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        weatherParams = JSON.parse(jsonMatch[0]);
+        try {
+          weatherParams = JSON.parse(jsonMatch[0]);
+          console.log('✅ AI weather generated successfully');
+          console.log('🌤️ Parsed Weather Params:', JSON.stringify(weatherParams, null, 2));
+        } catch (parseError) {
+          console.error('❌ Failed to parse AI JSON response:', parseError);
+          console.error('📄 JSON Match:', jsonMatch[0]);
+          throw new Error(`Failed to parse AI response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+        }
       } else {
-        throw new Error('Failed to parse AI response');
+        console.error('❌ No JSON found in AI response');
+        console.error('📄 Full AI Response:', aiResponse);
+        throw new Error('Failed to parse AI response - no JSON found');
       }
-
-      console.log('✅ AI weather generated successfully');
     } else {
       console.log('📦 Using fallback logic (no API key)');
-      weatherParams = generateFallbackWeather(chainData);
+      const timeFactors = getTimeFactors();
+      weatherParams = generateFallbackWeather(chainData, timeFactors);
     }
 
     // 5. Update cache
@@ -176,11 +196,13 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Fallback weather generation logic (using weighted calculation)
+ * Fallback weather generation logic (using weighted calculation + time factors)
  */
-function generateFallbackWeather(chainData: any): SceneWeatherParams {
+function generateFallbackWeather(chainData: any, timeFactors?: any): SceneWeatherParams {
   const change = chainData.aggregatedMetrics.averageChange; // Already weighted average
   const volatility = chainData.aggregatedMetrics.volatility;
+  const fearGreedValue = chainData.aggregatedMetrics.fearGreedValue; // Fear & Greed Index (0-100)
+  const fearGreedIndex = chainData.fearGreedIndex;
   
   // Calculate parametric elements based on market data
   const totalVolume = (
@@ -194,6 +216,28 @@ function generateFallbackWeather(chainData: any): SceneWeatherParams {
   const floatingOrbCount = Math.min(30, Math.max(5, Math.floor(chainData.aggregatedMetrics.trendingStrength * 3))); // Orbs based on trending
   const energyBeamIntensity = Math.min(1, Math.abs(change) / 10); // Beams based on price change
   
+  // Apply time factors for variety (even when market is stable)
+  const hour = new Date().getHours();
+  const dayOfWeek = new Date().getDay();
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+  
+  // Time-based variation: add randomness based on hour and day
+  const timeVariation = (hour % 6) * 0.5; // Changes every 6 hours
+  const dayVariation = dayOfWeek * 0.3; // Changes by day
+  const combinedVariation = timeVariation + dayVariation;
+  
+  // Adjust market change with time variation for more dynamic weather
+  const adjustedChange = change + combinedVariation;
+  
+  // Apply Fear & Greed Index influence (if available)
+  let fearGreedAdjustment = 0;
+  if (fearGreedValue !== undefined) {
+    // Map Fear & Greed (0-100) to weather adjustment (-5 to +5)
+    fearGreedAdjustment = (fearGreedValue - 50) / 10; // -5 to +5
+  }
+  
+  const finalAdjustedChange = adjustedChange + fearGreedAdjustment;
+  
   let weatherType: SceneWeatherParams['weatherType'] = 'cloudy';
   let mood: SceneWeatherParams['mood'] = 'calm';
   let skyColor = '#F0F8FF'; // Alice Blue - soft sky color
@@ -203,14 +247,109 @@ function generateFallbackWeather(chainData: any): SceneWeatherParams {
   let islandState: SceneWeatherParams['islandState'] = 'normal';
   let ambientEffects: SceneWeatherParams['ambientEffects'] = ['birds_flying'];
   
-  if (volatility > 8) {
-    weatherType = 'foggy';
-    mood = 'mysterious';
-    skyColor = '#D4DCE8'; // Soft gray-blue
-    specialEvents = ['lightning'];
-    waterEffect = 'turbulent';
-    ambientEffects = ['dust_particles'];
-  } else if (change > 5) {
+  // Override based on Fear & Greed Index if available
+  if (fearGreedValue !== undefined) {
+    if (fearGreedValue <= 24) {
+      // Extreme Fear: Dark, stormy
+      weatherType = 'stormy';
+      mood = 'chaotic';
+      skyColor = '#1C1C1C'; // Very dark
+      waterColor = '#0F1419';
+      specialEvents = ['lightning', 'fireball'];
+      waterEffect = 'turbulent';
+      islandState = 'smoking';
+      ambientEffects = ['embers', 'dust_particles'];
+    } else if (fearGreedValue <= 44) {
+      // Fear: Cloudy, rainy
+      weatherType = 'rainy';
+      mood = 'melancholic';
+      skyColor = '#556B7A';
+      waterColor = '#3B4F5E';
+      specialEvents = ['shooting_star'];
+      waterEffect = 'waves';
+      ambientEffects = ['dust_particles'];
+    } else if (fearGreedValue >= 76) {
+      // Extreme Greed: Very bright, celebratory
+      weatherType = 'sunny';
+      mood = 'energetic';
+      skyColor = '#FFF8DC'; // Bright cream
+      waterColor = '#87CEEB'; // Light sky blue
+      specialEvents = ['meteor_shower', 'aurora', 'rainbow'];
+      waterEffect = 'ripples';
+      islandState = 'glowing';
+      ambientEffects = ['confetti', 'sparkles', 'birds_flying'];
+    } else if (fearGreedValue >= 56) {
+      // Greed: Bright, sunny
+      weatherType = 'sunny';
+      mood = 'energetic';
+      skyColor = '#F0F8FF';
+      waterColor = '#4DA6FF';
+      specialEvents = ['meteor_shower', 'aurora'];
+      waterEffect = 'ripples';
+      islandState = 'glowing';
+      ambientEffects = ['sparkles', 'birds_flying'];
+    }
+    // Neutral (45-55) uses default market-based logic below
+  }
+  
+  // Apply special date events if available
+  if (timeFactors?.specialDate) {
+    const specialDate = timeFactors.specialDate;
+    if (specialDate.sceneEffect.specialEvents && Array.isArray(specialDate.sceneEffect.specialEvents)) {
+      specialEvents = specialDate.sceneEffect.specialEvents as any;
+    }
+    if (specialDate.sceneEffect.skyColorOverride) {
+      skyColor = specialDate.sceneEffect.skyColorOverride;
+    }
+    if (specialDate.sceneEffect.ambientEffects && Array.isArray(specialDate.sceneEffect.ambientEffects)) {
+      ambientEffects = specialDate.sceneEffect.ambientEffects as any;
+    }
+  }
+  
+  // Apply random events for variety
+  if (timeFactors?.randomEvent) {
+    const randomEvent = timeFactors.randomEvent;
+    if (randomEvent.sceneEffect.specialEvents && Array.isArray(randomEvent.sceneEffect.specialEvents) && specialEvents && specialEvents[0] === 'none') {
+      specialEvents = randomEvent.sceneEffect.specialEvents as any;
+    }
+    if (randomEvent.sceneEffect.ambientEffects && Array.isArray(randomEvent.sceneEffect.ambientEffects)) {
+      ambientEffects = [...(ambientEffects || []), ...(randomEvent.sceneEffect.ambientEffects as any)];
+    }
+  }
+  
+  // Apply time-based mood and effects
+  if (timeFactors?.timeTendency) {
+    const timeTendency = timeFactors.timeTendency;
+    if (timeTendency.moodTendency && Math.abs(change) < 2) {
+      // Only override mood if market is relatively stable
+      mood = timeTendency.moodTendency as any;
+    }
+  }
+  
+  // Weekend effect: more positive vibes
+  if (isWeekend && Math.abs(change) < 3) {
+    if (specialEvents && specialEvents[0] === 'none') {
+      specialEvents = ['shooting_star'];
+    }
+    if (!ambientEffects || ambientEffects.length === 0) {
+      ambientEffects = ['birds_flying', 'sparkles'];
+    } else {
+      ambientEffects = [...ambientEffects, 'birds_flying', 'sparkles'];
+    }
+  }
+  
+  // Only apply market-based logic if Fear & Greed didn't override (neutral range or not available)
+  const shouldUseMarketLogic = fearGreedValue === undefined || (fearGreedValue >= 45 && fearGreedValue <= 55);
+  
+  if (shouldUseMarketLogic) {
+    if (volatility > 8) {
+      weatherType = 'foggy';
+      mood = 'mysterious';
+      skyColor = '#D4DCE8'; // Soft gray-blue
+      specialEvents = ['lightning'];
+      waterEffect = 'turbulent';
+      ambientEffects = ['dust_particles'];
+    } else if (finalAdjustedChange > 5) {
     weatherType = 'sunny';
     mood = 'energetic';
     skyColor = '#FFF8DC'; // Cornsilk - soft cream color
@@ -219,29 +358,33 @@ function generateFallbackWeather(chainData: any): SceneWeatherParams {
     waterColor = '#87CEFA'; // Light Sky Blue
     islandState = 'glowing';
     ambientEffects = ['birds_flying', 'sparkles'];
-  } else if (change > 0) {
-    weatherType = 'cloudy';
-    mood = 'calm';
-    skyColor = '#F0F8FF'; // Alice Blue
-    waterEffect = 'ripples';
-    ambientEffects = ['birds_flying'];
-  } else if (change > -5) {
-    weatherType = 'rainy';
-    mood = 'melancholic';
-    skyColor = '#556B7A'; // 稍微調亮的冷灰藍色，保持陰冷但不過暗
-    specialEvents = ['shooting_star'];
-    waterEffect = 'waves';
-    waterColor = '#3B4F5E'; // 稍微調亮的深藍灰色
-    ambientEffects = ['dust_particles'];
-  } else {
-    weatherType = 'stormy';
-    mood = 'chaotic';
-    skyColor = '#2F4F4F'; // Dark Slate Gray
-    specialEvents = ['fireball', 'lightning'];
-    waterEffect = 'turbulent';
-    waterColor = '#1C2841';
-    islandState = 'smoking';
-    ambientEffects = ['embers'];
+    } else if (finalAdjustedChange > 0) {
+      weatherType = 'cloudy';
+      mood = 'calm';
+      skyColor = '#F0F8FF'; // Alice Blue
+      waterEffect = 'ripples';
+      // Keep ambient effects from time factors if set
+      if (!ambientEffects || ambientEffects.length === 0 || ambientEffects[0] === 'none') {
+        ambientEffects = ['birds_flying'];
+      }
+    } else if (finalAdjustedChange > -5) {
+      weatherType = 'rainy';
+      mood = 'melancholic';
+      skyColor = '#556B7A';
+      specialEvents = ['shooting_star'];
+      waterEffect = 'waves';
+      waterColor = '#3B4F5E';
+      ambientEffects = ['dust_particles'];
+    } else {
+      weatherType = 'stormy';
+      mood = 'chaotic';
+      skyColor = '#2F4F4F';
+      specialEvents = ['fireball', 'lightning'];
+      waterEffect = 'turbulent';
+      waterColor = '#1C2841';
+      islandState = 'smoking';
+      ambientEffects = ['embers'];
+    }
   }
   
   console.log(`🐟 Fallback: Creating ${fishCount} fish from $${totalVolume.toFixed(1)}B volume, ${floatingOrbCount} orbs, ${energyBeamIntensity.toFixed(2)} beam intensity`);
@@ -254,21 +397,43 @@ function generateFallbackWeather(chainData: any): SceneWeatherParams {
   let ambientIntensity = 0.5;
   let particleIntensity = Math.min(1, Math.abs(change) / 20);
   
+  // Apply time-based sky color override (if not already overridden by special date)
+  if (timeFactors?.timeTendency?.skyColorModifier && !timeFactors?.specialDate) {
+    // Blend time-based color with market-based color for smooth transitions
+    const timeColor = timeFactors.timeTendency.skyColorModifier;
+    if (hour >= 20 || hour < 5) {
+      // Night: use time color directly
+      skyColor = timeColor;
+    } else if (hour >= 5 && hour < 7) {
+      // Dawn: blend
+      skyColor = timeColor;
+    } else if (hour >= 18 && hour < 20) {
+      // Dusk: blend
+      skyColor = timeColor;
+    }
+  }
+  
   // Apply weather-specific overrides for stronger atmosphere
   if (weatherType === 'rainy' || weatherType === 'stormy') {
     // Rainy/Stormy: Cold, but slightly brighter for visibility
-    fogDensity = Math.max(0.4, Math.min(0.75, volatility / 12)); // 稍微降低霧密度
-    fogColor = weatherType === 'rainy' ? '#5A6B7A' : '#3D4854'; // 稍微調亮的冷灰色霧
-    sunIntensity = weatherType === 'rainy' ? 0.55 : 0.3; // 提高一點光照（從 0.4 到 0.55）
-    sunColor = '#9AABB8'; // 稍微亮一點的冷色光
-    ambientIntensity = weatherType === 'rainy' ? 0.4 : 0.3; // 提高環境光（從 0.3 到 0.4）
-    particleIntensity = Math.max(0.5, Math.min(1, Math.abs(change) / 15)); // More rain particles
+    fogDensity = Math.max(0.4, Math.min(0.75, volatility / 12));
+    fogColor = weatherType === 'rainy' ? '#5A6B7A' : '#3D4854';
+    sunIntensity = weatherType === 'rainy' ? 0.55 : 0.3;
+    sunColor = '#9AABB8';
+    ambientIntensity = weatherType === 'rainy' ? 0.4 : 0.3;
+    particleIntensity = Math.max(0.5, Math.min(1, Math.abs(adjustedChange) / 15));
   } else if (weatherType === 'foggy') {
     // Foggy: Dense, mysterious
     fogDensity = Math.max(0.6, Math.min(0.9, volatility / 10));
     fogColor = '#B0BEC5';
     sunIntensity = 0.5;
     ambientIntensity = 0.35;
+  } else {
+    // Apply time-based lighting adjustments for sunny/cloudy days
+    if (timeFactors?.timeTendency?.lightingModifier) {
+      sunIntensity *= timeFactors.timeTendency.lightingModifier;
+      ambientIntensity *= timeFactors.timeTendency.lightingModifier;
+    }
   }
   
   return {
@@ -292,7 +457,7 @@ function generateFallbackWeather(chainData: any): SceneWeatherParams {
     fishCount,
     floatingOrbCount,
     energyBeamIntensity,
-    reasoning: `Fallback (SUI weight 40%): ${change.toFixed(2)}% weighted avg, ${volatility.toFixed(2)} volatility, ${fishCount} fish from $${totalVolume.toFixed(1)}B volume`,
+    reasoning: `Fallback (SUI weight 40%): ${change.toFixed(2)}% weighted avg (adjusted: ${finalAdjustedChange.toFixed(2)}%), ${volatility.toFixed(2)} volatility, ${fishCount} fish from $${totalVolume.toFixed(1)}B volume${fearGreedIndex ? `, Fear & Greed: ${fearGreedIndex.value} (${fearGreedIndex.valueClassification})` : ''}${timeFactors?.specialDate ? `, Special: ${timeFactors.specialDate.name}` : ''}${timeFactors?.randomEvent ? `, Random: ${timeFactors.randomEvent.name}` : ''}`,
     timestamp: Date.now(),
   };
 }

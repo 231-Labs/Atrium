@@ -8,7 +8,7 @@ import { SpacePreviewWindow, SpaceList, SubscribedSpaces } from "@/components/sp
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import { RetroPanel } from "@/components/common/RetroPanel";
 import { RetroButton } from "@/components/common/RetroButton";
-import { useIdentity } from "@/hooks/useIdentity";
+import { useIdentity } from "@/components/identity/hooks/useIdentity";
 
 export default function Home() {
   const currentAccount = useCurrentAccount();

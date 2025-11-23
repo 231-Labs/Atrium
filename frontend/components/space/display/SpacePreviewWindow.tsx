@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
-import { useUserSpaces } from '@/hooks/useUserSpaces';
+import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { useUserSpaces, UserSpaceData } from '../hooks/useUserSpaces';
 import { RetroPanel } from '@/components/common/RetroPanel';
 import { RetroButton } from '@/components/common/RetroButton';
 import { RetroHeading } from '@/components/common/RetroHeading';
@@ -15,30 +15,31 @@ import { LandingPageView } from './LandingPageView';
 import { ExplorerLink } from '@/components/common/ExplorerLink';
 import { UpdateSubscriptionPriceForm } from '../settings/UpdateSubscriptionPriceForm';
 import { useRouter } from 'next/navigation';
-import { UserSpaceData } from '@/hooks/useUserSpaces';
-import { useSpaceEditor } from '@/hooks/useSpaceEditor';
-import { useSpace } from '@/hooks/useSpace';
-import { useKioskManagement } from '@/hooks/useKioskManagement';
-import { serializeConfig, uploadConfigToWalrus, SpaceScreenConfig } from '@/utils/spaceConfig';
-import { updateSpaceConfig, SUI_CHAIN } from '@/utils/transactions';
+import { useSpaceEditor } from '../hooks/useSpaceEditor';
+import { useSpace } from '../hooks/useSpace';
+import { useKioskManagement } from '../nft/hooks/useKioskManagement';
+import { useMarketplaceKioskCap } from '../nft/hooks/useMarketplaceKioskCap';
+import { serializeConfig, uploadConfigToWalrus, downloadConfigFromWalrus, configToSceneObjects, SpaceScreenConfig } from '@/utils/spaceConfig';
+import { updateSpaceConfig, SUI_CHAIN, MIST_PER_SUI } from '@/utils/transactions';
+import { listNFT, delistNFT } from '@/utils/kioskTransactions';
 import { ObjectTransform } from '@/types/spaceEditor';
 import { Model3DItem } from '@/types/three';
 import { getWalrusBlobUrl } from '@/config/walrus';
-
-// Custom Hooks
-import { useContentWindows } from '@/hooks/useContentWindows';
-import { useSpaceViewMode } from '@/hooks/useSpaceViewMode';
-import { useSpaceContent } from '@/hooks/useSpaceContent';
+import { useContentWindows } from '@/components/windows/hooks/useContentWindows';
+import { useSpaceViewMode } from '../hooks/useSpaceViewMode';
+import { useSpaceContent } from '../hooks/useSpaceContent';
+import { WeatherModeToggle } from '@/components/3d/WeatherModeToggle';
 
 export function SpacePreviewWindow() {
   const currentAccount = useCurrentAccount();
   const router = useRouter();
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const suiClient = useSuiClient();
   const { spaces: userSpaces, loading, refetch } = useUserSpaces();
   
   // Custom Hooks
   const { openEssay, openVideo, renderWindows } = useContentWindows();
-  const { viewMode, setViewMode } = useSpaceViewMode('landing'); // Creator defaults to landing
+  const { viewMode, setViewMode, weatherMode, setWeatherMode } = useSpaceViewMode('landing', 'day'); // Creator defaults to landing, weather to day
   
   // UI State
   const [selectedSpace, setSelectedSpace] = useState<UserSpaceData | null>(
@@ -93,10 +94,13 @@ export function SpacePreviewWindow() {
   }, [editorState.objects]);
 
   // Get NFT list from Kiosk
-  const { nfts } = useKioskManagement({
+  const { nfts, refetch: refetchNFTs, kioskClient } = useKioskManagement({
     kioskId: spaceDetail?.marketplaceKioskId || null,
     enabled: !!spaceDetail?.marketplaceKioskId && isEditMode,
   });
+
+  // Get Kiosk Cap for listing/delisting
+  const { kioskCapId, kioskCap } = useMarketplaceKioskCap(spaceDetail?.marketplaceKioskId || null);
 
   React.useEffect(() => {
     if (userSpaces.length > 0 && !selectedSpace) {
@@ -110,6 +114,47 @@ export function SpacePreviewWindow() {
       setActiveEditTab('content');
     }
   }, [viewMode, activeEditTab]);
+
+  // Load config from Walrus when space is selected
+  React.useEffect(() => {
+    if (!selectedSpace?.configQuilt || !isEditMode) {
+      return;
+    }
+    
+    const loadConfig = async () => {
+      try {
+        console.log('📥 Loading config from Walrus:', selectedSpace.configQuilt);
+        const config = await downloadConfigFromWalrus(selectedSpace.configQuilt);
+        const configObjects = configToSceneObjects(config);
+        
+        const editorObjects = configObjects
+          .map(obj => {
+            const nft = nfts.find(n => n.id === obj.nftId);
+            if (!obj.nftId) return null;
+            
+            return {
+              id: obj.nftId,
+              nftId: obj.nftId,
+              objectType: obj.objectType!,
+              name: nft?.name || 'NFT Object',
+              thumbnail: nft?.imageUrl || '',
+              transform: obj.transform!,
+              visible: obj.visible!,
+            };
+          })
+          .filter((obj): obj is NonNullable<typeof obj> => obj !== null);
+        
+        console.log('✅ Loaded config objects:', editorObjects);
+        if (editorObjects.length > 0) {
+          setObjects(editorObjects);
+        }
+      } catch (error) {
+        console.error('❌ Failed to load config:', error);
+      }
+    };
+    
+    loadConfig();
+  }, [selectedSpace?.configQuilt, isEditMode, nfts]);
 
   const handleCreateSpace = () => {
     setIsCreatingSpace(true);
@@ -194,8 +239,20 @@ export function SpacePreviewWindow() {
     try {
       setIsSaving(true);
       
-      const config = serializeConfig(getAllObjects());
+      const objects = getAllObjects();
+      console.log('📦 Saving objects:', objects);
+      
+      if (objects.length === 0) {
+        alert('No objects to save. Please add some NFTs to the scene first.');
+        return;
+      }
+      
+      const config = serializeConfig(objects);
+      console.log('📝 Serialized config:', config);
+      
+      console.log('☁️ Uploading to Walrus...');
       const blobId = await uploadConfigToWalrus(config);
+      console.log('✅ Uploaded, blob ID:', blobId);
 
       const tx = updateSpaceConfig(
         selectedSpace.spaceId,
@@ -203,22 +260,27 @@ export function SpacePreviewWindow() {
         { newConfigQuilt: blobId }
       );
 
-      signAndExecute(
+      await signAndExecute(
         { transaction: tx, chain: SUI_CHAIN },
         {
           onSuccess: () => {
+            console.log('✅ Configuration saved to blockchain!');
             alert('Configuration saved!');
             refetch();
           },
           onError: (err) => {
-            console.error('Save failed:', err);
-            alert('Failed to save configuration');
+            console.error('❌ Transaction failed:', err);
+            alert('Failed to save configuration to blockchain');
           },
         }
       );
     } catch (err: any) {
-      console.error('Save error:', err);
-      alert(`Error: ${err.message}`);
+      console.error('❌ Save error:', {
+        message: err.message,
+        stack: err.stack,
+        error: err
+      });
+      alert(`Error: ${err.message || 'Unknown error'}`);
     } finally {
       setIsSaving(false);
     }
@@ -257,6 +319,146 @@ export function SpacePreviewWindow() {
   const handleNFTTransformChange = (nftId: string, transform: ObjectTransform) => {
     updateObjectTransform(nftId, transform);
   };
+
+  const handleListNFT = React.useCallback(async (nftId: string, price: number) => {
+    if (!currentAccount) {
+      throw new Error('Please connect your wallet first');
+    }
+    
+    if (!spaceDetail?.marketplaceKioskId || !kioskCapId || !kioskClient) {
+      throw new Error('Missing kiosk information');
+    }
+
+    const nft = nfts.find(n => n.id === nftId);
+    if (!nft) {
+      throw new Error('NFT not found');
+    }
+
+    const priceInMist = BigInt(Math.floor(price * MIST_PER_SUI));
+    const cap = kioskCap || kioskCapId;
+    const tx = listNFT(nftId, nft.type, priceInMist, cap, kioskClient);
+    
+    try {
+      const result = await signAndExecute(
+        { transaction: tx, chain: SUI_CHAIN },
+        {
+          onSuccess: (result) => {
+            console.log('✅ List transaction successful:', result);
+          },
+          onError: (error) => {
+            console.error('❌ List transaction failed:', error);
+            throw error;
+          },
+        }
+      );
+      
+      // Wait for transaction to be finalized on chain
+      if (result?.digest) {
+        // Poll for transaction confirmation
+        let confirmed = false;
+        let attempts = 0;
+        const maxAttempts = 10;
+        
+        while (!confirmed && attempts < maxAttempts) {
+          try {
+            const txStatus = await suiClient.waitForTransaction({
+              digest: result.digest,
+              options: {
+                showEffects: true,
+                showEvents: true,
+              },
+            });
+            confirmed = true;
+          } catch (err) {
+            attempts++;
+            if (attempts < maxAttempts) {
+              await new Promise(r => setTimeout(r, 1000));
+            } else {
+              console.warn('Transaction confirmation timeout, proceeding anyway');
+              confirmed = true;
+            }
+          }
+        }
+      } else {
+        // Fallback: wait a bit longer if no digest
+        await new Promise(r => setTimeout(r, 3000));
+      }
+      
+      // Refresh NFT list
+      await refetchNFTs();
+    } catch (error) {
+      console.error('❌ List transaction error:', error);
+      throw error;
+    }
+  }, [currentAccount, spaceDetail, kioskCapId, kioskCap, kioskClient, nfts, signAndExecute, refetchNFTs, suiClient]);
+
+  const handleDelistNFT = React.useCallback(async (nftId: string) => {
+    if (!spaceDetail?.marketplaceKioskId || !kioskCapId || !kioskClient) {
+      throw new Error('Missing kiosk information');
+    }
+
+    const nft = nfts.find(n => n.id === nftId);
+    if (!nft) {
+      throw new Error('NFT not found');
+    }
+
+    // Use full cap object if available, otherwise use string ID
+    const cap = kioskCap || kioskCapId;
+    const tx = delistNFT(nftId, nft.type, cap, kioskClient);
+    
+    try {
+      const result = await signAndExecute(
+        { transaction: tx, chain: SUI_CHAIN },
+        {
+          onSuccess: (result) => {
+            console.log('✅ Delist transaction successful:', result);
+          },
+          onError: (error) => {
+            console.error('❌ Delist transaction failed:', error);
+            throw error;
+          },
+        }
+      );
+      
+      // Wait for transaction to be finalized on chain
+      if (result?.digest) {
+        // Poll for transaction confirmation
+        let confirmed = false;
+        let attempts = 0;
+        const maxAttempts = 10;
+        
+        while (!confirmed && attempts < maxAttempts) {
+          try {
+            const txStatus = await suiClient.waitForTransaction({
+              digest: result.digest,
+              options: {
+                showEffects: true,
+                showEvents: true,
+              },
+            });
+            confirmed = true;
+          } catch (err) {
+            attempts++;
+            if (attempts < maxAttempts) {
+              await new Promise(r => setTimeout(r, 1000));
+            } else {
+              console.warn('Transaction confirmation timeout, proceeding anyway');
+              confirmed = true;
+            }
+          }
+        }
+      } else {
+        // Fallback: wait a bit longer if no digest
+        await new Promise(r => setTimeout(r, 3000));
+      }
+      
+      // Refresh NFT list
+      await refetchNFTs();
+    } catch (error) {
+      console.error('❌ Delist transaction error:', error);
+      throw error;
+    }
+  }, [spaceDetail, kioskCapId, kioskCap, kioskClient, nfts, signAndExecute, refetchNFTs, suiClient]);
 
   // Convert visible NFTs to 3D model list
   const visibleModels = useMemo<Model3DItem[]>(() => {
@@ -495,8 +697,8 @@ export function SpacePreviewWindow() {
                         onScaleChange={handleNFTScaleChange}
                         onTransformChange={handleNFTTransformChange}
                         onSelect={(id) => setEditingNFTId(id === editingNFTId ? null : id)}
-                        onList={() => {}}
-                        onDelist={() => {}}
+                        onList={handleListNFT}
+                        onDelist={handleDelistNFT}
                       />
                     ) : (
                       <div className="text-center py-12">
@@ -654,13 +856,15 @@ export function SpacePreviewWindow() {
           ) : selectedSpace ? (
             <div className="flex-1 relative flex flex-col min-h-0 overflow-hidden">
               {viewMode === '3d' ? (
-                <RetroFrameCanvas className="flex-1 w-full h-full">
+                <RetroFrameCanvas className="flex-1 w-full h-full relative">
                   <ThreeScene 
                     spaceId={selectedSpace.spaceId} 
                     models={visibleModels}
                     enableGallery={true} 
                     isPreview={true}
                     enableSubscriberAvatars={true}
+                    weatherMode={weatherMode}
+                    onWeatherModeChange={setWeatherMode}
                   />
                 </RetroFrameCanvas>
               ) : (
@@ -693,7 +897,14 @@ export function SpacePreviewWindow() {
                 )}
               </div>
 
-              <div className="absolute top-4 right-4 z-10">
+              <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+                {viewMode === '3d' && (
+                  <WeatherModeToggle 
+                    currentMode={weatherMode} 
+                    onModeChange={setWeatherMode} 
+                    showAi={false}
+                  />
+                )}
                 {!isEditMode && (
                    <RetroButton 
                     variant="secondary" 

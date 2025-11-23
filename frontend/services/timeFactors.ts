@@ -92,6 +92,53 @@ const SPECIAL_DATES: Record<string, TimeBasedEvent> = {
       effectIntensity: 0.8,
     },
   },
+  
+  '11-01': {
+    name: 'Bitcoin Whitepaper Day',
+    description: 'Bitcoin whitepaper published',
+    priority: 8,
+    sceneEffect: {
+      specialEvents: ['aurora', 'meteor_shower'],
+      skyColorOverride: '#F7931A',
+      ambientEffects: ['sparkles', 'confetti'],
+      effectIntensity: 0.9,
+    },
+  },
+  
+  '01-03': {
+    name: 'Genesis Block Day',
+    description: 'Bitcoin genesis block mined',
+    priority: 9,
+    sceneEffect: {
+      specialEvents: ['meteor_shower', 'aurora', 'rainbow'],
+      skyColorOverride: '#F7931A',
+      ambientEffects: ['sparkles', 'confetti', 'birds_flying'],
+      effectIntensity: 1.0,
+    },
+  },
+  
+  '06-01': {
+    name: 'Crypto Day',
+    description: 'Celebrating cryptocurrency',
+    priority: 6,
+    sceneEffect: {
+      specialEvents: ['rainbow', 'sparkles'],
+      ambientEffects: ['sparkles', 'birds_flying'],
+      effectIntensity: 0.7,
+    },
+  },
+  
+  '15': {
+    name: 'Full Moon',
+    description: 'Full moon brings mystical energy',
+    priority: 5,
+    sceneEffect: {
+      specialEvents: ['aurora'],
+      skyColorOverride: '#E6E6FA',
+      ambientEffects: ['sparkles'],
+      effectIntensity: 0.6,
+    },
+  },
 };
 
 /**
@@ -134,7 +181,19 @@ class TimeFactorsService {
    */
   checkSpecialDate(): TimeBasedEvent | null {
     const currentDate = this.getCurrentDate();
-    return SPECIAL_DATES[currentDate] || null;
+    const day = String(new Date().getDate()).padStart(2, '0');
+    
+    // Check exact date match first (MM-DD format)
+    if (SPECIAL_DATES[currentDate]) {
+      return SPECIAL_DATES[currentDate];
+    }
+    
+    // Check monthly recurring events (e.g., '15' for 15th of every month)
+    if (SPECIAL_DATES[day]) {
+      return SPECIAL_DATES[day];
+    }
+    
+    return null;
   }
 
   /**
@@ -341,6 +400,42 @@ class TimeFactorsService {
           effectIntensity: 0.7,
         },
       },
+      {
+        name: 'Shooting Star',
+        description: 'A shooting star crosses the sky',
+        priority: 5,
+        sceneEffect: {
+          specialEvents: ['shooting_star'],
+          effectIntensity: 0.6,
+        },
+      },
+      {
+        name: 'Gentle Breeze',
+        description: 'A gentle breeze brings fresh energy',
+        priority: 4,
+        sceneEffect: {
+          ambientEffects: ['birds_flying'],
+          effectIntensity: 0.4,
+        },
+      },
+      {
+        name: 'Sparkling Sky',
+        description: 'The sky sparkles with magical energy',
+        priority: 5,
+        sceneEffect: {
+          ambientEffects: ['sparkles'],
+          effectIntensity: 0.6,
+        },
+      },
+      {
+        name: 'Rainbow Bridge',
+        description: 'A beautiful rainbow appears',
+        priority: 6,
+        sceneEffect: {
+          specialEvents: ['rainbow'],
+          effectIntensity: 0.7,
+        },
+      },
     ];
 
     return randomEvents[Math.floor(Math.random() * randomEvents.length)];
@@ -374,7 +469,7 @@ class TimeFactorsService {
       timeTendency: this.getTimeBasedWeatherTendency(),
       weekdayEffect: this.getWeekdayEffect(),
       moonPhase: this.getMoonPhase(),
-      randomEvent: this.generateRandomEvent(0.15), // 15% probability
+      randomEvent: this.generateRandomEvent(0.35), // 35% probability - increased for more variety
       timestamp: Date.now(),
     };
   }

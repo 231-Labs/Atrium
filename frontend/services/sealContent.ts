@@ -248,12 +248,12 @@ export async function decryptContent(
       console.log('✅ Signature obtained');
       sessionKey.setPersonalMessageSignature(signature);
 
-      // 3. Build subscription::seal_approve transaction
+      // 3. Build seal_approve_as_subscriber transaction
       const resourceIdBytes = fromHex(spaceId.replace('0x', ''));
       const tx = new Transaction();
       
       tx.moveCall({
-        target: `${PACKAGE_ID}::subscription::seal_approve`,
+        target: `${PACKAGE_ID}::subscription::seal_approve_as_subscriber`,
         arguments: [
           tx.pure.vector('u8', Array.from(resourceIdBytes)),
           tx.object(spaceId),
