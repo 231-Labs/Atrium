@@ -6,7 +6,7 @@
 import React, { useEffect } from 'react';
 import { SecureContentWindow } from './SecureContentWindow';
 import { VideoRenderer } from './renderers/ContentRenderers';
-import { useSecureContent } from '@/hooks/useSecureContent';
+import { useSecureContent } from '@/components/space/content/hooks/useSecureContent';
 
 interface VideoWindowProps {
   blobId: string;

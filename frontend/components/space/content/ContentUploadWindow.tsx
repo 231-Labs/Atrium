@@ -11,10 +11,11 @@ import {
   RetroFileUpload, 
   RetroToggle 
 } from '@/components/common/RetroForm';
-import { useContentUpload } from '@/hooks/useContentUpload';
-import { useWindowPosition } from '@/hooks/useWindowPosition';
+import { useContentUpload } from './hooks/useContentUpload';
+import { useWindowPosition } from '@/components/windows/hooks/useWindowPosition';
 import { saveContent, StoredContent, dispatchContentUpdateEvent } from '@/utils/contentStorage';
 import { recordContent } from '@/utils/transactions';
+import { MarkdownRenderer } from '@/components/common/MarkdownRenderer';
 
 interface ContentUploadWindowProps {
   isOpen: boolean;
@@ -36,19 +37,14 @@ interface UploadFormData {
   tags: string;
 }
 
+// 使用統一的 MarkdownRenderer 組件進行預覽
 const SimpleMarkdown = ({ content }: { content: string }) => {
-    const lines = content.split('\n');
     return (
-      <div className="prose prose-sm max-w-none font-serif text-gray-800 leading-relaxed p-4 bg-white h-full overflow-y-auto scrollbar-hidden">
-        {lines.map((line, i) => {
-          if (line.startsWith('# ')) return <h1 key={i} className="text-2xl font-bold mt-4 mb-2 border-b border-gray-200 pb-1">{line.slice(2)}</h1>;
-          if (line.startsWith('## ')) return <h2 key={i} className="text-xl font-bold mt-3 mb-2">{line.slice(3)}</h2>;
-          if (line.startsWith('### ')) return <h3 key={i} className="text-lg font-bold mt-2 mb-1 text-gray-700">{line.slice(4)}</h3>;
-          if (line.startsWith('- ')) return <li key={i} className="ml-4 list-disc">{line.slice(2)}</li>;
-          if (line.startsWith('> ')) return <blockquote key={i} className="border-l-4 border-gray-300 pl-4 italic my-2 text-gray-600">{line.slice(2)}</blockquote>;
-          if (line.trim() === '') return <div key={i} className="h-4" />;
-          return <p key={i} className="my-1">{line}</p>;
-        })}
+      <div className="h-full overflow-y-auto scrollbar-hidden p-4 bg-white">
+        <MarkdownRenderer 
+          content={content}
+          className="prose-sm"
+        />
       </div>
     );
 };

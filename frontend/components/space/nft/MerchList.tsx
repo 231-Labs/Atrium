@@ -1,6 +1,6 @@
 import { MerchCard } from "./MerchCard";
 import { RetroPanel } from "@/components/common/RetroPanel";
-import { useKioskListedItems } from "@/hooks/useKioskListedItems";
+import { useKioskListedItems } from "./hooks/useKioskListedItems";
 import { StateContainer } from "@/components/common/StateContainer";
 
 interface MerchListProps {

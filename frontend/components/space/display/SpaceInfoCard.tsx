@@ -3,7 +3,7 @@
 import { RetroPanel } from "@/components/common/RetroPanel";
 import { RetroHeading } from "@/components/common/RetroHeading";
 import { getWalrusBlobUrl } from "@/config/walrus";
-import { useCreatorIdentity } from "@/hooks/useCreatorIdentity";
+import { useCreatorIdentity } from "@/components/identity/hooks/useCreatorIdentity";
 import { getIdentityImageBlobId } from "@/utils/identity-helpers";
 
 interface SpaceInfoCardProps {

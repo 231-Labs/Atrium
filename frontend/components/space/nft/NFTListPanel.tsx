@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { RetroPanel } from '@/components/common/RetroPanel';
 import { RetroButton } from '@/components/common/RetroButton';
 import { RetroSlider } from '@/components/common/RetroSlider';
-import { useKioskManagement, KioskNFT } from '@/hooks/useKioskManagement';
+import { useKioskManagement, KioskNFT } from './hooks/useKioskManagement';
 import { ObjectTransform } from '@/types/spaceEditor';
 
 interface NFTListPanelProps {

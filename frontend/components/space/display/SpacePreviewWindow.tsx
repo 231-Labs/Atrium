@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
-import { useUserSpaces } from '@/hooks/useUserSpaces';
+import { useUserSpaces, UserSpaceData } from '../hooks/useUserSpaces';
 import { RetroPanel } from '@/components/common/RetroPanel';
 import { RetroButton } from '@/components/common/RetroButton';
 import { RetroHeading } from '@/components/common/RetroHeading';
@@ -15,22 +15,19 @@ import { LandingPageView } from './LandingPageView';
 import { ExplorerLink } from '@/components/common/ExplorerLink';
 import { UpdateSubscriptionPriceForm } from '../settings/UpdateSubscriptionPriceForm';
 import { useRouter } from 'next/navigation';
-import { UserSpaceData } from '@/hooks/useUserSpaces';
-import { useSpaceEditor } from '@/hooks/useSpaceEditor';
-import { useSpace } from '@/hooks/useSpace';
-import { useKioskManagement } from '@/hooks/useKioskManagement';
-import { useMarketplaceKioskCap } from '@/hooks/useMarketplaceKioskCap';
+import { useSpaceEditor } from '../hooks/useSpaceEditor';
+import { useSpace } from '../hooks/useSpace';
+import { useKioskManagement } from '../nft/hooks/useKioskManagement';
+import { useMarketplaceKioskCap } from '../nft/hooks/useMarketplaceKioskCap';
 import { serializeConfig, uploadConfigToWalrus, downloadConfigFromWalrus, configToSceneObjects, SpaceScreenConfig } from '@/utils/spaceConfig';
 import { updateSpaceConfig, SUI_CHAIN, MIST_PER_SUI } from '@/utils/transactions';
 import { listNFT, delistNFT } from '@/utils/kioskTransactions';
 import { ObjectTransform } from '@/types/spaceEditor';
 import { Model3DItem } from '@/types/three';
 import { getWalrusBlobUrl } from '@/config/walrus';
-
-// Custom Hooks
-import { useContentWindows } from '@/hooks/useContentWindows';
-import { useSpaceViewMode } from '@/hooks/useSpaceViewMode';
-import { useSpaceContent } from '@/hooks/useSpaceContent';
+import { useContentWindows } from '@/components/windows/hooks/useContentWindows';
+import { useSpaceViewMode } from '../hooks/useSpaceViewMode';
+import { useSpaceContent } from '../hooks/useSpaceContent';
 import { WeatherModeToggle } from '@/components/3d/WeatherModeToggle';
 
 export function SpacePreviewWindow() {

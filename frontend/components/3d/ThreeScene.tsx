@@ -1,9 +1,9 @@
 "use client";
 
 import * as THREE from 'three';
-import { useThreeScene } from '@/hooks/three/useThreeScene';
-import { useAIWeather } from '@/hooks/useAIWeather';
-import { useSpaceSubscribers } from '@/hooks/useSpaceSubscribers';
+import { useThreeScene } from './hooks/useThreeScene';
+import { useAIWeather } from './hooks/useAIWeather';
+import { useSpaceSubscribers } from '@/components/space/hooks/useSpaceSubscribers';
 import { timeFactors } from '@/services/timeFactors';
 import { Model3DItem, ThreeSceneApi } from '@/types/three';
 import { WeatherMode, STAGE_THEMES, STATIC_WEATHER_CONFIGS } from '@/types/theme';

@@ -8,8 +8,8 @@ import { ExplorerLink } from '@/components/common/ExplorerLink';
 import { useState, useEffect } from 'react';
 import { bindAvatar, updateImage, updateBio } from '@/utils/transactions';
 import { uploadBlobToWalrus } from '@/services/walrusApi';
-import { useKioskData } from '@/hooks/useKioskData';
-import { useIdentity } from '@/hooks/useIdentity';
+import { useKioskData } from '@/components/space/nft/hooks/useKioskData';
+import { useIdentity } from '@/components/identity/hooks/useIdentity';
 import { getIdentityImageBlobId } from '@/utils/identity-helpers';
 import dynamic from 'next/dynamic';
 

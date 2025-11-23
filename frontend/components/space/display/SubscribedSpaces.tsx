@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useSubscribedSpaces } from "@/hooks/useSubscribedSpaces";
+import { useSubscribedSpaces } from "../hooks/useSubscribedSpaces";
 import { SpaceCard } from "./SpaceCard";
 import { SpaceCategoryFilter, SpaceCategory } from "../ui";
 import { RetroPanel } from "@/components/common/RetroPanel";

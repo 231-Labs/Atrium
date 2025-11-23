@@ -5,7 +5,7 @@
 
 "use client";
 
-import { useAIWeather } from '@/hooks/useAIWeather';
+import { useAIWeather } from './hooks/useAIWeather';
 import { RetroPanel } from '../common/RetroPanel';
 
 interface AIWeatherIndicatorProps {

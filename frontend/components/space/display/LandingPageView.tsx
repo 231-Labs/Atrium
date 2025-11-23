@@ -3,7 +3,7 @@ import { RetroPanel } from "@/components/common/RetroPanel";
 import { RetroButton } from "@/components/common/RetroButton";
 import { ContentItemData } from "../content";
 import { getWalrusBlobUrl } from "@/config/walrus";
-import { useCreatorIdentity } from "@/hooks/useCreatorIdentity";
+import { useCreatorIdentity } from "@/components/identity/hooks/useCreatorIdentity";
 import { getIdentityImageBlobId } from "@/utils/identity-helpers";
 import { SubscribeButton } from "@/components/subscription/SubscribeButton";
 import { useCurrentAccount } from "@mysten/dapp-kit";

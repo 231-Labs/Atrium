@@ -6,7 +6,7 @@
 import React from 'react';
 import { SecureContentWindow } from './SecureContentWindow';
 import { TextRenderer } from './renderers/ContentRenderers';
-import { useSecureContent } from '@/hooks/useSecureContent';
+import { useSecureContent } from '@/components/space/content/hooks/useSecureContent';
 
 interface EssayWindowProps {
   blobId: string;
