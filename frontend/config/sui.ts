@@ -15,7 +15,7 @@ export const SUI_CHAIN = SUI_CONFIG.CHAIN;
 export const SUI_CLOCK = SUI_CONFIG.CLOCK_ID;
 export const MIST_PER_SUI = SUI_CONFIG.MIST_PER_SUI;
 
-// Contract addresses - Testnet deployment (2025-01-XX)
+// Contract addresses - Testnet deployment (2025-11-23)
 export const PACKAGE_ID = '0xc34fcde1cc554a65e7c553a8f61d9a1f97d085a05d1f58f0508b91597a393334';
 export const IDENTITY_REGISTRY_ID = '0xad4d9d6fbd3357b2242788a945a12c2a4911f5ca2470ac6ef541e97a9a769839';
 export const SPACE_REGISTRY_ID = '0x92689353cf597f8e9e7d0e0526f0a623bfb4aae2356a045325cd1be2bb5bab68';
