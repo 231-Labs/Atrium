@@ -33,8 +33,9 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
-# Move contracts (exclude from commit)
-contract/
+# Move contracts build output (exclude from commit)
+contract/build/
+contract/Move.lock
 
 # Markdown files (except README.md)
 *.md

@@ -66,95 +66,94 @@ POE_API_KEY=your_poe_api_key
 
 ```
 atrium/
-├── contract/                   # Sui Move contracts
-│   ├── sources/
-│   │   ├── identity.move      # User identity NFTs
-│   │   ├── space.move         # Gallery spaces (Kiosk-based)
-│   │   └── subscription.move  # Subscription system
-│   └── Move.toml
+├── contract/                          # Sui Move contracts
+│   └── sources/
+│       ├── identity.move              # User identity NFTs (Sui)
+│       ├── space.move                 # Gallery spaces (Sui Kiosk)
+│       └── subscription.move          # Subscription system (Sui)
 │
 ├── frontend/
-│   ├── app/
-│   │   ├── page.tsx           # Landing page
-│   │   ├── space/[id]/        # Gallery detail view
-│   │   └── api/ai-weather/    # Weather API endpoint
+│   ├── app/api/ai-weather/            # AI Weather API endpoint
+│   │   └── route.ts
 │   │
-│   ├── components/
-│   │   ├── 3d/                # Three.js components
-│   │   │   ├── ThreeScene.tsx
-│   │   │   ├── AIWeatherIndicator.tsx
-│   │   │   └── GLBViewer.tsx
-│   │   ├── space/             # Gallery components
-│   │   │   ├── display/       # Space list, cards, detail
-│   │   │   ├── content/       # Content upload, manager
-│   │   │   └── creation/      # Space creation flow
-│   │   └── common/            # Retro UI components
+│   ├── services/                      # Core services
+│   │   ├── aiWeatherClient.ts         # AI Weather client
+│   │   ├── chainDataApi.ts            # CoinGecko market data
+│   │   ├── poeApi.ts                  # POE AI integration
+│   │   ├── timeFactors.ts             # Market time analysis
+│   │   ├── walrusApi.ts               # Walrus storage service
+│   │   └── sealContent.ts             # Seal encryption service
 │   │
-│   ├── lib/three/
-│   │   ├── SceneManager.ts    # Core 3D scene management
-│   │   ├── effects/           # Weather & water effects
-│   │   └── TransformControls.ts
+│   ├── config/
+│   │   ├── sui.ts                     # Sui network config
+│   │   ├── walrus.ts                  # Walrus endpoints
+│   │   ├── seal.ts                    # Seal key servers
+│   │   └── aiPrompts.ts               # AI weather prompts
 │   │
-│   ├── services/
-│   │   ├── aiWeatherClient.ts # Weather API client
-│   │   ├── chainDataApi.ts    # CoinGecko integration
-│   │   ├── walrusApi.ts       # Walrus storage
-│   │   ├── sealVideo.ts       # Seal encryption
-│   │   └── timeFactors.ts     # Market time analysis
+│   ├── hooks/
+│   │   └── useAIWeather.ts            # AI Weather state hook
 │   │
-│   └── hooks/
-│       ├── useAIWeather.ts    # Weather state management
-│       ├── useSpace.ts        # Space data fetching
-│       └── useIdentity.ts     # User identity
+│   ├── components/3d/
+│   │   └── AIWeatherIndicator.tsx     # Weather UI component
+│   │
+│   └── utils/
+│       ├── kioskTransactions.ts       # Sui Kiosk transactions
+│       └── transactions.ts            # Sui transaction helpers
 │
 └── docs/
-    ├── AI_WEATHER_SYSTEM.md   # Weather system guide
-    └── PROJECT_SUMMARY.md     # Detailed project info
+    └── AI_WEATHER_SYSTEM.md           # AI Weather system docs
 ```
 
 ---
 
 ## 🎮 User Flows
 
-### For Creators
-
-1. **Create Identity**
-   - Connect Sui wallet
-   - Upload profile image to Walrus
-   - Mint Identity NFT
-
-2. **Initialize Gallery Space**
-   - Pay 0.1 SUI initialization fee
-   - Upload cover image
-   - Configure 3D scene
-   - Set subscription price
-
-3. **Upload Content**
-   - Add videos/images
-   - Encrypt with Seal
-   - Store on Walrus
-   - Place NFTs in gallery
-
-4. **Manage Subscribers**
-   - View subscriber avatars in space
-   - Update gallery layout
-   - Release new content
-
-### For Fans
-
-1. **Create Identity**
-   - Connect wallet
-   - Upload profile image
-   - Mint Identity NFT
-
-2. **Explore Galleries**
-   - Browse creator spaces
-   - Experience dynamic weather
-   - Preview public content
-
-3. **Subscribe**
-   - Pay subscription fee in SUI
-   - Gain access to encrypted content
-   - Avatar appears in creator's gallery
+```mermaid
+flowchart TD
+    Start([開始]) --> UserType{用戶類型}
+    
+    UserType -->|創作者| CreatorFlow
+    UserType -->|粉絲| FanFlow
+    
+    %% Creator Flow
+    CreatorFlow[創作者流程] --> ConnectWallet1[連接 Sui 錢包]
+    ConnectWallet1 --> UploadProfile1[上傳頭像到 Walrus]
+    UploadProfile1 --> MintIdentity1[鑄造 Identity NFT<br/>Sui 鏈上]
+    MintIdentity1 --> InitSpace[初始化 Gallery Space<br/>支付 0.1 SUI]
+    InitSpace --> UploadCover[上傳封面圖到 Walrus]
+    UploadCover --> SetPrice[設定訂閱價格]
+    SetPrice --> UploadContent[上傳內容]
+    UploadContent --> EncryptSeal[使用 Seal 加密]
+    EncryptSeal --> StoreWalrus[儲存到 Walrus]
+    StoreWalrus --> PlaceNFT[放置 NFT 到 Gallery<br/>Sui Kiosk]
+    PlaceNFT --> ManageSubs[管理訂閱者]
+    ManageSubs --> End1([完成])
+    
+    %% Fan Flow
+    FanFlow[粉絲流程] --> ConnectWallet2[連接 Sui 錢包]
+    ConnectWallet2 --> UploadProfile2[上傳頭像到 Walrus]
+    UploadProfile2 --> MintIdentity2[鑄造 Identity NFT<br/>Sui 鏈上]
+    MintIdentity2 --> BrowseSpaces[瀏覽 Gallery Spaces]
+    BrowseSpaces --> ViewWeather[體驗 AI 天氣效果<br/>CoinGecko + POE]
+    ViewWeather --> PreviewContent[預覽公開內容]
+    PreviewContent --> Subscribe{訂閱?}
+    Subscribe -->|是| PaySUI[支付 SUI 訂閱費<br/>鏈上交易]
+    PaySUI --> DecryptSeal[解鎖 Seal 加密內容]
+    DecryptSeal --> AvatarAppears[頭像出現在 Gallery]
+    AvatarAppears --> End2([完成])
+    Subscribe -->|否| End2
+    
+    style CreatorFlow fill:#e1f5ff
+    style FanFlow fill:#fff4e1
+    style EncryptSeal fill:#ffe1f5
+    style DecryptSeal fill:#ffe1f5
+    style StoreWalrus fill:#e1ffe1
+    style UploadProfile1 fill:#e1ffe1
+    style UploadProfile2 fill:#e1ffe1
+    style MintIdentity1 fill:#f0e1ff
+    style MintIdentity2 fill:#f0e1ff
+    style PaySUI fill:#f0e1ff
+    style ViewWeather fill:#ffe1e1
+```
 
 

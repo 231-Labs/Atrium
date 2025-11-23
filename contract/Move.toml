@@ -1,0 +1,12 @@
+[package]
+name = "atrium"
+version = "0.0.1"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
+
+[addresses]
+atrium = "0x0"
+# Protocol treasury address - receives initialization fees
+protocol_treasury = "0x006d980cadd43c778e628201b45cfd3ba6e1047c65f67648a88f635108ffd6eb"
