@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
         model: 'Claude-3-Haiku',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.7,
-        max_tokens: 500,
+        max_tokens: 1000,
       };
       
       const response = await fetch('https://api.poe.com/v1/chat/completions', {
@@ -121,7 +121,7 @@ export async function GET(request: NextRequest) {
       if (jsonMatch) {
         try {
           weatherParams = JSON.parse(jsonMatch[0]);
-          console.log('✅ AI weather generated:', weatherParams.weatherType, '-', weatherParams.reasoning.substring(0, 80) + '...');
+          console.log('✅ AI weather generated:', weatherParams.weatherType, '-', weatherParams.reasoning.substring(0, 1000) + '...');
         } catch (parseError) {
           console.error('❌ Failed to parse AI JSON response:', parseError);
           console.error('📄 JSON Match:', jsonMatch[0]);
