@@ -1,6 +1,7 @@
 'use client';
 
-import { useCurrentAccount, ConnectButton, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
+import { useCurrentAccount, useDAppKit } from '@mysten/dapp-kit-react';
+import { ConnectButton } from '@mysten/dapp-kit-react/ui';
 import { RetroPanel } from '@/components/common/RetroPanel';
 import { RetroHeading } from '@/components/common/RetroHeading';
 import { RetroSelect } from '@/components/common/RetroSelect';
@@ -15,9 +16,29 @@ import dynamic from 'next/dynamic';
 
 const GLBViewer = dynamic(() => import('@/components/3d/GLBViewer'), { ssr: false });
 
+// TODO(Part C): replace this shim with `dAppKit.signAndExecuteTransaction(...)`
+// from `useDAppKit()` and rewrite call sites to use the Promise-based API.
+function useSignAndExecuteTransactionShim() {
+  const dAppKit = useDAppKit();
+  return {
+    mutate: (
+      input: { transaction: any },
+      callbacks?: {
+        onSuccess?: (result: any) => void;
+        onError?: (error: any) => void;
+      },
+    ) => {
+      dAppKit
+        .signAndExecuteTransaction({ transaction: input.transaction })
+        .then((result) => callbacks?.onSuccess?.(result))
+        .catch((error) => callbacks?.onError?.(error));
+    },
+  };
+}
+
 export function SettingsPage() {
   const currentAccount = useCurrentAccount();
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const { mutate: signAndExecute } = useSignAndExecuteTransactionShim();
   const { ownedKiosks, fetchingKiosks, selectedKioskId, setSelectedKioskId } = useKioskData();
   const { identity, loading: loadingIdentity, refetch: refetchIdentity } = useIdentity();
   
@@ -546,20 +567,14 @@ export function SettingsPage() {
                     {currentAccount.address}
                   </p>
                 </div>
-                  <ConnectButton
-                  connectText="Connect"
-                    style={{ fontFamily: 'Georgia, serif' }}
-                  />
+                  <ConnectButton />
               </div>
             ) : (
               <div className="text-center py-4">
                 <p className="text-sm text-gray-600 mb-3" style={{ fontFamily: 'Georgia, serif' }}>
                   No wallet connected
                 </p>
-                <ConnectButton
-                  connectText="Connect Wallet"
-                  style={{ fontFamily: 'Georgia, serif' }}
-                />
+                <ConnectButton />
               </div>
             )}
           </RetroPanel>

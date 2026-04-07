@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useCurrentAccount, ConnectButton } from "@mysten/dapp-kit";
+import { useCurrentAccount } from "@mysten/dapp-kit-react";
+import { ConnectButton } from "@mysten/dapp-kit-react/ui";
 import { IdentityRegistration } from "@/components/identity/IdentityRegistration";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { SpacePreviewWindow, SpaceList, SubscribedSpaces } from "@/components/space/display";
@@ -48,10 +49,7 @@ export default function Home() {
                 Please connect your wallet to get started
               </p>
               <div className="flex justify-center">
-                <ConnectButton
-                  connectText="Connect Wallet"
-                  style={{ fontFamily: 'Georgia, serif' }}
-                />
+                <ConnectButton />
               </div>
             </div>
           </RetroPanel>
