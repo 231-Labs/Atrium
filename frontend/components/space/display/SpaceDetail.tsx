@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useRef } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useCurrentAccount } from "@mysten/dapp-kit-react";
 import { ThreeScene } from "@/components/3d/ThreeScene";
@@ -26,6 +27,14 @@ import { purchaseNFT as purchaseNFTTx } from "@/utils/kioskTransactions";
 import { useKioskClient } from "@/components/providers/KioskClientProvider";
 import { useDAppKit, useCurrentClient } from "@mysten/dapp-kit-react";
 import { SUI_CHAIN } from "@/utils/transactions";
+import { useSpacePulse } from "@/components/3d/hooks/useSpacePulse";
+import { useAbstractSpaceState } from "@/components/3d/hooks/useAbstractSpaceState";
+import { useSpaceSubscribers } from "@/components/space/hooks/useSpaceSubscribers";
+
+const AbstractSpaceRenderer = dynamic(
+  () => import("@/components/3d/AbstractSpaceRenderer"),
+  { ssr: false },
+);
 
 interface SpaceDetailProps {
   space?: {
@@ -103,9 +112,21 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
     }
   }, [authId, isCreator, setIsSubscribed]);
   
-  const { viewMode, weatherMode, setViewMode, setWeatherMode } = useSpaceViewMode(isCreator ? 'landing' : '3d');
+  const { viewMode, weatherMode, setViewMode, setWeatherMode, isAbstractView } = useSpaceViewMode(isCreator ? 'landing' : '3d');
   const { openEssay, openVideo, renderWindows } = useContentWindows();
   const { contentItems: displayItems } = useSpaceContent(safeSpace.id);
+  const { subscribers } = useSpaceSubscribers(safeSpace.id || null);
+
+  // Abstract space — pulse → state pipeline (only computed when needed)
+  const abstractPulse = useSpacePulse({
+    spaceId: safeSpace.id || null,
+    subscriberCount: subscribers.length,
+    contentItems: displayItems,
+    isConnected: !!currentAccount,
+    isSubscribed,
+    isCreator,
+  });
+  const abstractState = useAbstractSpaceState(abstractPulse, safeSpace.id || null);
   const { config: spaceConfig } = useSpaceConfig(safeSpace.configQuilt);
   const { nfts } = useKioskManagement({
     kioskId: safeSpace.marketplaceKioskId || space?.marketplaceKioskId || null,
@@ -414,17 +435,32 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
               </div>
               
               <div className="flex items-center gap-2 flex-shrink-0">
-                {/* View Toggle */}
+                {/* View Toggles */}
                 <RetroButton
-                   onClick={() => setViewMode(viewMode === '3d' ? 'landing' : '3d')}
-                   variant="secondary"
-                   size="sm"
-                 >
-                   {viewMode === '3d' ? '📖 Landing View' : '🏛️ 3D View'}
-                 </RetroButton>
-              
+                  onClick={() => setViewMode('3d')}
+                  variant={viewMode === '3d' ? 'primary' : 'secondary'}
+                  size="sm"
+                >
+                  🏛️ 3D
+                </RetroButton>
+                <RetroButton
+                  onClick={() => setViewMode('landing')}
+                  variant={viewMode === 'landing' ? 'primary' : 'secondary'}
+                  size="sm"
+                >
+                  📖 Landing
+                </RetroButton>
+                <RetroButton
+                  onClick={() => setViewMode('abstract')}
+                  variant={viewMode === 'abstract' ? 'primary' : 'secondary'}
+                  size="sm"
+                >
+                  ✦ Abstract
+                </RetroButton>
+
                 {viewMode === '3d' && (
                   <>
+                    <div className="h-6 w-px bg-gray-300" />
                     <WeatherModeToggle currentMode={weatherMode} onModeChange={setWeatherMode} />
                     <div className="h-6 w-px bg-gray-300" />
                   </>
@@ -459,8 +495,12 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
                 isCreator={isCreator}
               />
             </RetroFrameCanvas>
+          ) : viewMode === 'abstract' ? (
+            <div className="flex-1 relative overflow-hidden bg-black">
+              <AbstractSpaceRenderer state={abstractState} className="w-full h-full" />
+            </div>
           ) : (
-            <LandingPageView 
+            <LandingPageView
               space={safeSpace}
               contentItems={displayItems}
               isSubscribed={hasAccess}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { WeatherMode } from '@/types/theme';
 
-type ViewMode = '3d' | 'landing';
+export type ViewMode = '3d' | 'landing' | 'abstract';
 
 export function useSpaceViewMode(defaultMode: ViewMode = '3d', defaultWeather: WeatherMode = 'dynamic') {
   const [viewMode, setViewMode] = useState<ViewMode>(defaultMode);
@@ -13,6 +13,7 @@ export function useSpaceViewMode(defaultMode: ViewMode = '3d', defaultWeather: W
 
   const set3DView = () => setViewMode('3d');
   const setLandingView = () => setViewMode('landing');
+  const setAbstractView = () => setViewMode('abstract');
 
   return {
     viewMode,
@@ -20,10 +21,11 @@ export function useSpaceViewMode(defaultMode: ViewMode = '3d', defaultWeather: W
     toggleViewMode,
     set3DView,
     setLandingView,
+    setAbstractView,
     weatherMode,
     setWeatherMode,
     is3DView: viewMode === '3d',
     isLandingView: viewMode === 'landing',
+    isAbstractView: viewMode === 'abstract',
   };
 }
-
