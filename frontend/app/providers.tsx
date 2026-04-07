@@ -1,38 +1,58 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { SuiClientProvider, WalletProvider } from "@mysten/dapp-kit";
-import { getFullnodeUrl } from "@mysten/sui/client";
-import { useState, useEffect } from "react";
-import { retroWhiteTheme } from "@/config/walletTheme";
+import { DAppKitProvider, createDAppKit } from "@mysten/dapp-kit-react";
+import { SuiGrpcClient } from "@mysten/sui/grpc";
+import { SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
+import { useState } from "react";
 import { KioskClientProvider } from "@/components/providers/KioskClientProvider";
-import "@mysten/dapp-kit/dist/index.css";
 
 // Load debug tools in development
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   import('@/utils/contentDebug');
 }
 
-const networks = {
-  testnet: {
-    url: getFullnodeUrl('testnet'),
-    websocketUrl: 'wss://fullnode.testnet.sui.io:443',
-  },
-};
+/**
+ * Legacy JSON-RPC client kept around for the few APIs that gRPC v2 doesn't
+ * cover yet (notably `queryEvents`). Live consumers should prefer the gRPC
+ * client returned by `useCurrentClient()`; this fallback is exposed via
+ * `useJsonRpcClient()` below for surgical use only.
+ */
+const jsonRpcFallbackClient = new SuiJsonRpcClient({
+  network: 'testnet',
+  url: 'https://fullnode.testnet.sui.io:443',
+});
+
+export function getJsonRpcFallbackClient() {
+  return jsonRpcFallbackClient;
+}
+
+const dAppKit = createDAppKit({
+  networks: ['testnet'],
+  defaultNetwork: 'testnet',
+  createClient: (network) =>
+    new SuiGrpcClient({
+      network,
+      baseUrl: 'https://fullnode.testnet.sui.io:443',
+    }),
+});
+
+declare module '@mysten/dapp-kit-react' {
+  interface Register {
+    dAppKit: typeof dAppKit;
+  }
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
 
   return (
     <QueryClientProvider client={queryClient}>
-      <SuiClientProvider networks={networks} defaultNetwork="testnet">
-        <WalletProvider theme={retroWhiteTheme}>
-          <KioskClientProvider networkName="testnet">
-            {children}
-          </KioskClientProvider>
-        </WalletProvider>
-      </SuiClientProvider>
+      <DAppKitProvider dAppKit={dAppKit}>
+        <KioskClientProvider networkName="testnet">
+          {children}
+        </KioskClientProvider>
+      </DAppKitProvider>
     </QueryClientProvider>
   );
 }
-

@@ -1,8 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useMemo } from 'react';
-import { KioskClient, Network } from '@mysten/kiosk';
-import { useSuiClient } from '@mysten/dapp-kit';
+import { KioskClient } from '@mysten/kiosk';
+import { useCurrentClient } from '@mysten/dapp-kit-react';
 
 const KioskClientContext = createContext<KioskClient | null>(null);
 
@@ -13,15 +13,14 @@ export function KioskClientProvider({
   children: React.ReactNode; 
   networkName?: 'testnet' | 'mainnet';
 }) {
-  const suiClient = useSuiClient();
-  const kioskNetwork = networkName === 'mainnet' ? Network.MAINNET : Network.TESTNET;
+  const suiClient = useCurrentClient();
 
   const kioskClient = useMemo(() => {
-    return new KioskClient({ 
-      client: suiClient as any, 
-      network: kioskNetwork 
+    return new KioskClient({
+      client: suiClient as any,
+      network: networkName,
     });
-  }, [suiClient, kioskNetwork]);
+  }, [suiClient, networkName]);
 
   return (
     <KioskClientContext.Provider value={kioskClient}>

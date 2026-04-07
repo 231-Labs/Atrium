@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit-react';
+import { ConnectButton } from '@mysten/dapp-kit-react/ui';
 import { RetroButton } from '@/components/common/RetroButton';
 import { RetroPanel } from '@/components/common/RetroPanel';
 
