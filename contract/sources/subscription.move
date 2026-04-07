@@ -254,6 +254,10 @@ module atrium::subscription {
         subscription.expires_at < clock.timestamp_ms()
     }
 
+    public fun is_subscription_active(subscription: &Subscription, clock: &Clock): bool {
+        !is_expired(subscription, clock)
+    }
+
     public fun space_id(subscription: &Subscription): ID {
         subscription.space_id
     }

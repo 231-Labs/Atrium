@@ -1,8 +1,35 @@
 import * as THREE from 'three';
 import { StageThemeConfig } from '../../types/theme';
-import type { SceneWeatherParams } from '../../services/poeApi';
+import { SpacePulseParams, TimeOfDay } from '../../types/spacePulse';
 import { SpecialEffectsManager } from './effects/SpecialEffects';
 import { WaterEffectsManager } from './effects/WaterEffects';
+
+/** Internal visual representation — derived from SpacePulseParams or set directly. */
+interface SceneWeatherParams {
+  skyColor: string;
+  fogDensity: number;
+  fogColor: string;
+  sunIntensity: number;
+  sunColor: string;
+  ambientIntensity: number;
+  weatherType: 'sunny' | 'cloudy' | 'rainy' | 'stormy' | 'foggy' | 'snowy';
+  particleIntensity: number;
+  windSpeed: number;
+  cloudSpeed: number;
+  mood: 'calm' | 'energetic' | 'melancholic' | 'mysterious' | 'chaotic';
+  waterEffect?: 'calm' | 'ripples' | 'waves' | 'turbulent' | 'frozen';
+  waterColor?: string;
+  specialEvents?: Array<'meteor_shower' | 'shooting_star' | 'fireball' | 'fire_ring' | 'aurora' | 'lightning' | 'rainbow' | 'none'>;
+  rainbowColors?: string[];
+  islandState?: 'normal' | 'glowing' | 'smoking' | 'frozen' | 'burning';
+  ambientEffects?: Array<'birds_flying' | 'dust_particles' | 'sparkles' | 'embers' | 'snowfall' | 'confetti' | 'none'>;
+  effectIntensity?: number;
+  fishCount?: number;
+  floatingOrbCount?: number;
+  energyBeamIntensity?: number;
+  reasoning: string;
+  timestamp: number;
+}
 
 export interface AtriumGallerySceneConfig {
   theme?: StageThemeConfig;
@@ -2626,6 +2653,100 @@ export class AtriumGalleryScene {
    */
   getCurrentWeatherParams(): SceneWeatherParams | undefined {
     return this.currentWeatherParams;
+  }
+
+  /**
+   * updatePulseParams — public entry point for the three-layer co-creation model.
+   * Converts SpacePulseParams into internal SceneWeatherParams and delegates to
+   * the existing updateWeatherParams() rendering machinery.
+   */
+  updatePulseParams(pulse: SpacePulseParams) {
+    const params = this.pulseToWeather(pulse);
+    this.updateWeatherParams(params);
+  }
+
+  /** Convert SpacePulseParams → SceneWeatherParams for internal rendering. */
+  private pulseToWeather(pulse: SpacePulseParams): SceneWeatherParams {
+    const { timeOfDay, globalPulse, seasonalHue, subscriberCount, contentCount,
+            encryptedContentCount, visitCount, isSubscribed } = pulse;
+
+    // ── Time of day → sky colours ──────────────────────────────────────────
+    const skyColor = timeOfDay === 'night'
+      ? '#0f172a'
+      : timeOfDay === 'dusk'
+      ? '#1e3a5f'
+      : '#d4e9f7';
+
+    const fogColor = timeOfDay === 'night' ? '#0f172a' : timeOfDay === 'dusk' ? '#2d5a8a' : '#e8f4f8';
+    const sunColor = timeOfDay === 'night' ? '#4488cc' : timeOfDay === 'dusk' ? '#ff8844' : '#fff5e6';
+    const sunIntensity = timeOfDay === 'night' ? 0.3 : timeOfDay === 'dusk' ? 0.8 : 1.4;
+    const ambientIntensity = timeOfDay === 'night' ? 0.15 : timeOfDay === 'dusk' ? 0.4 : 0.7;
+
+    // ── Global pulse level → weather mood ─────────────────────────────────
+    let weatherType: SceneWeatherParams['weatherType'];
+    let mood: SceneWeatherParams['mood'];
+    let waterEffect: SceneWeatherParams['waterEffect'];
+
+    if (globalPulse < 0.2) {
+      weatherType = 'cloudy'; mood = 'calm'; waterEffect = 'calm';
+    } else if (globalPulse < 0.4) {
+      weatherType = 'cloudy'; mood = 'energetic'; waterEffect = 'ripples';
+    } else if (globalPulse < 0.6) {
+      weatherType = 'sunny'; mood = 'energetic'; waterEffect = 'ripples';
+    } else if (globalPulse < 0.8) {
+      weatherType = 'sunny'; mood = 'energetic'; waterEffect = 'waves';
+    } else {
+      weatherType = 'stormy'; mood = 'chaotic'; waterEffect = 'turbulent';
+    }
+
+    // Night override — shift to foggy/mysterious regardless of pulse
+    if (timeOfDay === 'night' && mood !== 'chaotic') {
+      weatherType = 'foggy'; mood = 'mysterious';
+    }
+
+    // ── Parametric visual elements from space data ────────────────────────
+    // Fish count: driven by content (trading floor → publishing activity)
+    const fishCount = Math.min(contentCount * 3, 30);
+
+    // Orb count: 5 base + encrypted content adds mysticism
+    const floatingOrbCount = Math.min(5 + encryptedContentCount * 2, 20);
+
+    // Energy beam: brighter for active creators with more content
+    const energyBeamIntensity = Math.min(contentCount / 20, 1.0);
+
+    // Particle density: subscriber scales particle presence
+    const particleIntensity = isSubscribed
+      ? Math.min(0.5 + subscriberCount / 20, 1.0)
+      : 0.3;
+
+    // Cloud / wind speed: returning visitors feel more alive
+    const cloudSpeed = Math.min(1 + visitCount * 0.2, 4);
+    const windSpeed = globalPulse * 5;
+
+    // Seasonal hue shift applied via fog density (proxy for now)
+    const fogDensity = 0.1 + (1 - globalPulse) * 0.3;
+
+    return {
+      skyColor,
+      fogDensity,
+      fogColor,
+      sunIntensity,
+      sunColor,
+      ambientIntensity,
+      weatherType,
+      particleIntensity,
+      windSpeed,
+      cloudSpeed,
+      mood,
+      waterEffect,
+      waterColor: timeOfDay === 'night' ? '#0f2a4a' : '#4db8d8',
+      islandState: subscriberCount >= 10 ? 'glowing' : 'normal',
+      energyBeamIntensity,
+      fishCount,
+      floatingOrbCount,
+      reasoning: 'pulse',
+      timestamp: Date.now(),
+    };
   }
 
   dispose() {

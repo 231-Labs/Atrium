@@ -13,6 +13,7 @@ import { useKioskData } from '@/components/space/nft/hooks/useKioskData';
 import { useIdentity } from '@/components/identity/hooks/useIdentity';
 import { getIdentityImageBlobId } from '@/utils/identity-helpers';
 import dynamic from 'next/dynamic';
+import { SubscriptionsSection } from './SubscriptionsSection';
 
 const GLBViewer = dynamic(() => import('@/components/3d/GLBViewer'), { ssr: false });
 
@@ -502,6 +503,14 @@ export function SettingsPage() {
              </div>
             )}
           </RetroPanel>
+        </div>
+
+        {/* Subscriptions Section */}
+        <div>
+          <h3 className="text-xs font-medium text-gray-600 mb-3 uppercase tracking-wide" style={{ fontFamily: 'Georgia, serif' }}>
+            Subscriptions
+          </h3>
+          <SubscriptionsSection />
         </div>
 
         {/* Wallet Section */}

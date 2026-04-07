@@ -14,6 +14,7 @@ export interface SubscribedSpaceData {
   creator: string;
   category?: string;
   subscriptionId: string;
+  expiresAt: number | null; // ms timestamp
 }
 
 export function useSubscribedSpaces() {
@@ -37,7 +38,7 @@ export function useSubscribedSpaces() {
       const ownedSubscriptions = await suiClient.getOwnedObjects({
         owner: currentAccount.address,
         filter: { StructType: `${PACKAGE_ID}::subscription::Subscription` },
-        options: { showContent: true }
+        options: { showContent: true },
       });
 
       const spaceDataPromises = ownedSubscriptions.data.map(async (obj) => {
@@ -47,12 +48,15 @@ export function useSubscribedSpaces() {
           const subscriptionFields = (obj.data.content as any).fields;
           const spaceId = subscriptionFields.space_id;
           const subscriptionId = obj.data.objectId;
+          const expiresAt = subscriptionFields.expires_at
+            ? Number(subscriptionFields.expires_at)
+            : null;
 
           if (!spaceId) return null;
 
           const spaceObject = await suiClient.getObject({
             id: spaceId,
-            options: { showContent: true }
+            options: { showContent: true },
           });
 
           if (spaceObject.data?.content?.dataType !== 'moveObject') return null;
@@ -71,14 +75,15 @@ export function useSubscribedSpaces() {
             creator: spaceFields.creator || '',
             category,
             subscriptionId,
+            expiresAt,
           } as SubscribedSpaceData;
-        } catch (err) {
+        } catch {
           return null;
         }
       });
 
       const spacesData = (await Promise.all(spaceDataPromises)).filter(
-        (space): space is SubscribedSpaceData => space !== null
+        (space): space is SubscribedSpaceData => space !== null,
       );
 
       setSpaces(spacesData);
@@ -95,4 +100,3 @@ export function useSubscribedSpaces() {
 
   return { spaces, loading, error, refetch: loadSubscribedSpaces };
 }
-

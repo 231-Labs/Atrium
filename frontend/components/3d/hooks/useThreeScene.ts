@@ -184,9 +184,14 @@ export function useThreeScene(options: UseThreeSceneOptions = {}) {
     return sceneManagerRef.current?.getVideoScreenMesh();
   }, []);
 
-  // Weather system integration
+  // Weather system integration (legacy — kept for compat)
   const updateWeatherParams = useCallback((params: any) => {
     sceneManagerRef.current?.updateWeatherParams(params);
+  }, []);
+
+  // Three-layer co-creation pulse system
+  const updatePulseParams = useCallback((params: any) => {
+    sceneManagerRef.current?.updatePulseParams(params);
   }, []);
 
   const getCurrentWeatherParams = useCallback(() => {
@@ -243,6 +248,7 @@ export function useThreeScene(options: UseThreeSceneOptions = {}) {
     getHolographicScreen,
     getVideoScreenMesh,
     updateWeatherParams,
+    updatePulseParams,
     getCurrentWeatherParams,
     attachTransformControls,
     detachTransformControls,

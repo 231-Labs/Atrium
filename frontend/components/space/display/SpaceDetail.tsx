@@ -77,7 +77,7 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
   const threeSceneRef = useRef<ThreeSceneApi>(null);
 
   const { isMobile } = useResponsive();
-  const { isSubscribed, identityId, setIsSubscribed } = useSpaceSubscription(safeSpace.kioskId);
+  const { isSubscribed, isExpired: isSubscriptionExpired, identityId, setIsSubscribed } = useSpaceSubscription(safeSpace.kioskId);
   
   // Check if current user is the space creator
   const isCreator = currentAccount?.address 
@@ -148,7 +148,7 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
       .filter((m): m is Model3DItem => m !== null);
   }, [spaceConfig, nfts]);
 
-  const accessStatus = getAccessStatus(currentAccount, hasAccess, isCreator);
+  const accessStatus = getAccessStatus(currentAccount, hasAccess, isCreator, isSubscriptionExpired);
 
   // Define tabs based on user status
   const contentTabs = [
@@ -454,6 +454,9 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
                 weatherMode={weatherMode}
                 onWeatherModeChange={setWeatherMode}
                 enableSubscriberAvatars={true}
+                isConnected={!!currentAccount}
+                isSubscribed={isSubscribed}
+                isCreator={isCreator}
               />
             </RetroFrameCanvas>
           ) : (

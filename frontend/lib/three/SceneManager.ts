@@ -563,6 +563,13 @@ export class SceneManager {
     }
   }
 
+  // Update scene from SpacePulseParams (three-layer co-creation model)
+  updatePulseParams(params: any) {
+    if (this.galleryScene) {
+      this.galleryScene.updatePulseParams(params);
+    }
+  }
+
   // Get current weather parameters
   getCurrentWeatherParams() {
     return this.galleryScene?.getCurrentWeatherParams();
