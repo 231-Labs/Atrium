@@ -37,9 +37,10 @@ yarn-error.log*
 contract/build/
 contract/Move.lock
 
-# Markdown files (except README.md)
+# Markdown files (except README.md and refactor docs)
 *.md
 !README.md
+!docs/refactor-plan.md
 
 # Package locks
 package-lock.json
