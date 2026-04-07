@@ -1,5 +1,5 @@
+import { getJsonRpcFallbackClient } from '@/app/providers';
 import { useEffect, useState } from 'react';
-import { useSuiClient } from '@mysten/dapp-kit';
 import { PACKAGE_ID } from '@/config/sui';
 
 export interface CreatorIdentity {
@@ -9,7 +9,7 @@ export interface CreatorIdentity {
 }
 
 export function useCreatorIdentity(address: string | null) {
-  const suiClient = useSuiClient();
+  const suiClient = getJsonRpcFallbackClient();
   
   const [identity, setIdentity] = useState<CreatorIdentity | null>(null);
   const [loading, setLoading] = useState(false);

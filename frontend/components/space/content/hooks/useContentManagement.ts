@@ -1,5 +1,5 @@
+import { getJsonRpcFallbackClient } from '@/app/providers';
 import { useState, useEffect, useCallback } from 'react';
-import { useSuiClient } from '@mysten/dapp-kit';
 import { 
   getContentBySpace, 
   getAllContent, 
@@ -25,7 +25,7 @@ interface UseContentManagementReturn {
 export function useContentManagement({ 
   spaceId 
 }: UseContentManagementOptions): UseContentManagementReturn {
-  const suiClient = useSuiClient();
+  const suiClient = getJsonRpcFallbackClient();
   const [contents, setContents] = useState<StoredContent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);

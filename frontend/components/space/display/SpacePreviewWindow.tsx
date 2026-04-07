@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount, useDAppKit, useCurrentClient } from '@mysten/dapp-kit-react';
 import { useUserSpaces, UserSpaceData } from '../hooks/useUserSpaces';
 import { RetroPanel } from '@/components/common/RetroPanel';
 import { RetroButton } from '@/components/common/RetroButton';
@@ -33,8 +33,8 @@ import { WeatherModeToggle } from '@/components/3d/WeatherModeToggle';
 export function SpacePreviewWindow() {
   const currentAccount = useCurrentAccount();
   const router = useRouter();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
-  const suiClient = useSuiClient();
+  const dAppKit = useDAppKit();
+  const suiClient = useCurrentClient();
   const { spaces: userSpaces, loading, refetch } = useUserSpaces();
   
   // Custom Hooks
@@ -266,25 +266,13 @@ export function SpacePreviewWindow() {
         { newConfigQuilt: blobId }
       );
 
-      await signAndExecute(
-        { transaction: tx, chain: SUI_CHAIN },
-        {
-          onSuccess: () => {
-            console.log('✅ Configuration saved to blockchain!');
-            setSaveStatus('success');
-            refetch();
-            // Auto-hide success message after 3 seconds
-            setTimeout(() => {
-              setSaveStatus('idle');
-            }, 3000);
-          },
-          onError: (err) => {
-            console.error('❌ Transaction failed:', err);
-            setSaveStatus('error');
-            setSaveErrorMessage(err.message || 'Failed to save configuration to blockchain');
-          },
-        }
-      );
+      await dAppKit.signAndExecuteTransaction({ transaction: tx });
+      console.log('✅ Configuration saved to blockchain!');
+      setSaveStatus('success');
+      refetch();
+      setTimeout(() => {
+        setSaveStatus('idle');
+      }, 3000);
     } catch (err: any) {
       console.error('❌ Save error:', {
         message: err.message,
@@ -351,58 +339,28 @@ export function SpacePreviewWindow() {
     const tx = listNFT(nftId, nft.type, priceInMist, cap, kioskClient);
     
     try {
-      const result = await signAndExecute(
-        { transaction: tx, chain: SUI_CHAIN },
-        {
-          onSuccess: (result) => {
-            console.log('✅ List transaction successful:', result);
-          },
-          onError: (error) => {
-            console.error('❌ List transaction failed:', error);
-            throw error;
-          },
-        }
-      );
+      const result = await dAppKit.signAndExecuteTransaction({ transaction: tx });
+      console.log('✅ List transaction successful:', result);
       
       // Wait for transaction to be finalized on chain
-      if (result?.digest) {
-        // Poll for transaction confirmation
-        let confirmed = false;
-        let attempts = 0;
-        const maxAttempts = 10;
-        
-        while (!confirmed && attempts < maxAttempts) {
-          try {
-            const txStatus = await suiClient.waitForTransaction({
-              digest: result.digest,
-              options: {
-                showEffects: true,
-                showEvents: true,
-              },
-            });
-            confirmed = true;
-          } catch (err) {
-            attempts++;
-            if (attempts < maxAttempts) {
-              await new Promise(r => setTimeout(r, 1000));
-            } else {
-              console.warn('Transaction confirmation timeout, proceeding anyway');
-              confirmed = true;
-            }
-          }
+      const digest = result.$kind === 'Transaction' ? result.Transaction.digest : null;
+      if (digest) {
+        try {
+          await suiClient.waitForTransaction({ digest, timeout: 10000 });
+        } catch (err) {
+          console.warn('Transaction confirmation timeout, proceeding anyway');
         }
       } else {
-        // Fallback: wait a bit longer if no digest
         await new Promise(r => setTimeout(r, 3000));
       }
-      
+
       // Refresh NFT list
       await refetchNFTs();
     } catch (error) {
       console.error('❌ List transaction error:', error);
       throw error;
     }
-  }, [currentAccount, spaceDetail, kioskCapId, kioskCap, kioskClient, nfts, signAndExecute, refetchNFTs, suiClient]);
+  }, [currentAccount, spaceDetail, kioskCapId, kioskCap, kioskClient, nfts, dAppKit, refetchNFTs, suiClient]);
 
   const handleDelistNFT = React.useCallback(async (nftId: string) => {
     if (!spaceDetail?.marketplaceKioskId || !kioskCapId || !kioskClient) {
@@ -419,58 +377,28 @@ export function SpacePreviewWindow() {
     const tx = delistNFT(nftId, nft.type, cap, kioskClient);
     
     try {
-      const result = await signAndExecute(
-        { transaction: tx, chain: SUI_CHAIN },
-        {
-          onSuccess: (result) => {
-            console.log('✅ Delist transaction successful:', result);
-          },
-          onError: (error) => {
-            console.error('❌ Delist transaction failed:', error);
-            throw error;
-          },
-        }
-      );
+      const result = await dAppKit.signAndExecuteTransaction({ transaction: tx });
+      console.log('✅ Delist transaction successful:', result);
       
       // Wait for transaction to be finalized on chain
-      if (result?.digest) {
-        // Poll for transaction confirmation
-        let confirmed = false;
-        let attempts = 0;
-        const maxAttempts = 10;
-        
-        while (!confirmed && attempts < maxAttempts) {
-          try {
-            const txStatus = await suiClient.waitForTransaction({
-              digest: result.digest,
-              options: {
-                showEffects: true,
-                showEvents: true,
-              },
-            });
-            confirmed = true;
-          } catch (err) {
-            attempts++;
-            if (attempts < maxAttempts) {
-              await new Promise(r => setTimeout(r, 1000));
-            } else {
-              console.warn('Transaction confirmation timeout, proceeding anyway');
-              confirmed = true;
-            }
-          }
+      const digest = result.$kind === 'Transaction' ? result.Transaction.digest : null;
+      if (digest) {
+        try {
+          await suiClient.waitForTransaction({ digest, timeout: 10000 });
+        } catch (err) {
+          console.warn('Transaction confirmation timeout, proceeding anyway');
         }
       } else {
-        // Fallback: wait a bit longer if no digest
         await new Promise(r => setTimeout(r, 3000));
       }
-      
+
       // Refresh NFT list
       await refetchNFTs();
     } catch (error) {
       console.error('❌ Delist transaction error:', error);
       throw error;
     }
-  }, [spaceDetail, kioskCapId, kioskCap, kioskClient, nfts, signAndExecute, refetchNFTs, suiClient]);
+  }, [spaceDetail, kioskCapId, kioskCap, kioskClient, nfts, dAppKit, refetchNFTs, suiClient]);
 
   // Convert visible NFTs to 3D model list
   const visibleModels = useMemo<Model3DItem[]>(() => {

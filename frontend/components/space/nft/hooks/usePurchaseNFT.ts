@@ -1,9 +1,10 @@
-import { useSignAndExecuteTransaction } from '@mysten/dapp-kit';
+import { useState } from 'react';
+import { useDAppKit } from '@mysten/dapp-kit-react';
 import { Transaction } from '@mysten/sui/transactions';
-import { SUI_CHAIN } from '@/utils/transactions';
 
 export function usePurchaseNFT() {
-  const { mutateAsync: signAndExecute, isPending } = useSignAndExecuteTransaction();
+  const dAppKit = useDAppKit();
+  const [isPurchasing, setIsPurchasing] = useState(false);
 
   const purchaseNFT = async (
     sourceKioskId: string,
@@ -46,23 +47,17 @@ export function usePurchaseNFT() {
       ],
     });
 
-    await signAndExecute(
-      {
-        transaction: tx,
-        chain: SUI_CHAIN,
-      },
-      {
-        onSuccess: () => {
-          console.log('NFT purchased successfully');
-        },
-        onError: (error) => {
-          console.error('Failed to purchase NFT:', error);
-          throw error;
-        },
-      }
-    );
+    setIsPurchasing(true);
+    try {
+      await dAppKit.signAndExecuteTransaction({ transaction: tx });
+      console.log('NFT purchased successfully');
+    } catch (error) {
+      console.error('Failed to purchase NFT:', error);
+      throw error;
+    } finally {
+      setIsPurchasing(false);
+    }
   };
 
-  return { purchaseNFT, isPurchasing: isPending };
+  return { purchaseNFT, isPurchasing };
 }
-

@@ -1,5 +1,6 @@
 import { Transaction } from '@mysten/sui/transactions';
 import { KioskTransaction, KioskClient } from '@mysten/kiosk';
+import { SuiJsonRpcClient } from '@mysten/sui/jsonRpc';
 
 export interface KioskCapData {
   objectId: string;
@@ -91,7 +92,7 @@ export async function purchaseNFT(
   }
 
   try {
-    const suiClient = kioskClient.client;
+    const suiClient = kioskClient.client as SuiJsonRpcClient;
     const { data: kioskCaps } = await suiClient.getOwnedObjects({
       owner: buyerAddress,
       filter: {

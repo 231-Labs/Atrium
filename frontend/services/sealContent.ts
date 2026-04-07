@@ -5,7 +5,7 @@
  */
 
 import { SealClient, SessionKey } from '@mysten/seal';
-import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
+import { SuiJsonRpcClient } from '@mysten/sui/jsonRpc';
 import { Transaction } from '@mysten/sui/transactions';
 import { fromHex } from '@mysten/sui/utils';
 import { getSealKeyServers } from '../config/seal';
@@ -20,7 +20,7 @@ const decryptionLocks = new Map<string, Promise<Uint8Array>>();
 function getSealClient(): SealClient {
   if (!sealClientInstance) {
     const keyServers = getSealKeyServers('testnet');
-    const suiClient = new SuiClient({ url: getFullnodeUrl('testnet') });
+    const suiClient = new SuiJsonRpcClient({ network: 'testnet', url: 'https://fullnode.testnet.sui.io:443' });
 
     sealClientInstance = new SealClient({
       suiClient,
@@ -76,7 +76,7 @@ export async function decryptContentAsCreator(
   
   const decryptPromise = (async () => {
     try {
-      const suiClient = new SuiClient({ url: getFullnodeUrl('testnet') });
+      const suiClient = new SuiJsonRpcClient({ network: 'testnet', url: 'https://fullnode.testnet.sui.io:443' });
 
       // 1. Create SessionKey
       const sessionKey = await SessionKey.create({
@@ -151,7 +151,7 @@ export async function decryptContentAsSubscriber(
   
   const decryptPromise = (async () => {
     try {
-      const suiClient = new SuiClient({ url: getFullnodeUrl('testnet') });
+      const suiClient = new SuiJsonRpcClient({ network: 'testnet', url: 'https://fullnode.testnet.sui.io:443' });
 
       // 1. Create SessionKey
       const sessionKey = await SessionKey.create({
@@ -231,7 +231,7 @@ export async function decryptContent(
   // Create decryption Promise and store it
   const decryptPromise = (async () => {
     try {
-      const suiClient = new SuiClient({ url: getFullnodeUrl('testnet') });
+      const suiClient = new SuiJsonRpcClient({ network: 'testnet', url: 'https://fullnode.testnet.sui.io:443' });
 
       // 1. Create SessionKey
       const sessionKey = await SessionKey.create({

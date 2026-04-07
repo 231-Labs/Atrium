@@ -1,14 +1,12 @@
 import { useMemo } from 'react';
-import { useSuiClient } from '@mysten/dapp-kit';
-import { KioskClient, Network } from '@mysten/kiosk';
+import { KioskClient } from '@mysten/kiosk';
+import { getJsonRpcFallbackClient } from '@/app/providers';
 
 export function useKioskClient() {
-  const suiClient = useSuiClient();
-  
   const kioskClient = useMemo(() => new KioskClient({
-    client: suiClient,
-    network: Network.TESTNET,
-  }), [suiClient]);
+    client: getJsonRpcFallbackClient(),
+    network: 'testnet',
+  }), []);
 
   return kioskClient;
 }

@@ -1,8 +1,9 @@
 'use client';
 
 import React, { createContext, useContext, useMemo } from 'react';
+
 import { KioskClient } from '@mysten/kiosk';
-import { useCurrentClient } from '@mysten/dapp-kit-react';
+import { getJsonRpcFallbackClient } from '@/app/providers';
 
 const KioskClientContext = createContext<KioskClient | null>(null);
 
@@ -13,14 +14,12 @@ export function KioskClientProvider({
   children: React.ReactNode; 
   networkName?: 'testnet' | 'mainnet';
 }) {
-  const suiClient = useCurrentClient();
-
   const kioskClient = useMemo(() => {
     return new KioskClient({
-      client: suiClient as any,
+      client: getJsonRpcFallbackClient(),
       network: networkName,
     });
-  }, [suiClient, networkName]);
+  }, [networkName]);
 
   return (
     <KioskClientContext.Provider value={kioskClient}>

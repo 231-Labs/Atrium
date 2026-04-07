@@ -1,10 +1,11 @@
+import { getJsonRpcFallbackClient } from '@/app/providers';
 import { useState, useCallback } from 'react';
-import { useCurrentAccount, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit-react';
 import { PACKAGE_ID } from '@/config/sui';
 
 export function useWalletSignature() {
   const currentAccount = useCurrentAccount();
-  const suiClient = useSuiClient();
+  const suiClient = getJsonRpcFallbackClient();
   const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

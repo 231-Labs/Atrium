@@ -16,29 +16,9 @@ import dynamic from 'next/dynamic';
 
 const GLBViewer = dynamic(() => import('@/components/3d/GLBViewer'), { ssr: false });
 
-// TODO(Part C): replace this shim with `dAppKit.signAndExecuteTransaction(...)`
-// from `useDAppKit()` and rewrite call sites to use the Promise-based API.
-function useSignAndExecuteTransactionShim() {
-  const dAppKit = useDAppKit();
-  return {
-    mutate: (
-      input: { transaction: any },
-      callbacks?: {
-        onSuccess?: (result: any) => void;
-        onError?: (error: any) => void;
-      },
-    ) => {
-      dAppKit
-        .signAndExecuteTransaction({ transaction: input.transaction })
-        .then((result) => callbacks?.onSuccess?.(result))
-        .catch((error) => callbacks?.onError?.(error));
-    },
-  };
-}
-
 export function SettingsPage() {
   const currentAccount = useCurrentAccount();
-  const { mutate: signAndExecute } = useSignAndExecuteTransactionShim();
+  const dAppKit = useDAppKit();
   const { ownedKiosks, fetchingKiosks, selectedKioskId, setSelectedKioskId } = useKioskData();
   const { identity, loading: loadingIdentity, refetch: refetchIdentity } = useIdentity();
   
@@ -114,24 +94,15 @@ export function SettingsPage() {
       setImageUploadStatus("Updating Identity...");
       const tx = updateImage(identity.id, blobId);
 
-      signAndExecute(
-        { transaction: tx },
-        {
-          onSuccess: () => {
-             setImageUploadStatus("Profile Image Updated!");
-             setTimeout(() => {
-               setIsUpdatingImage(false);
-               setImageFile(null);
-               setImagePreview(null);
-               setImageUploadStatus("");
-               refetchIdentity();
-             }, 1500);
-          },
-          onError: (e) => {
-             setImageUploadStatus("Error: " + e.message);
-          }
-        }
-      );
+      await dAppKit.signAndExecuteTransaction({ transaction: tx });
+      setImageUploadStatus("Profile Image Updated!");
+      setTimeout(() => {
+        setIsUpdatingImage(false);
+        setImageFile(null);
+        setImagePreview(null);
+        setImageUploadStatus("");
+        refetchIdentity();
+      }, 1500);
 
     } catch (e: any) {
       setImageUploadStatus("Error: " + e.message);
@@ -148,23 +119,14 @@ export function SettingsPage() {
       setGlbUploadStatus("Updating Identity...");
       const tx = bindAvatar(identity.id, blobId);
 
-      signAndExecute(
-        { transaction: tx },
-        {
-          onSuccess: () => {
-             setGlbUploadStatus("3D Avatar Updated!");
-             setTimeout(() => {
-               setIsUpdatingGlb(false);
-               setGlbFile(null);
-               setGlbUploadStatus("");
-               refetchIdentity();
-             }, 1500);
-          },
-          onError: (e) => {
-             setGlbUploadStatus("Error: " + e.message);
-          }
-        }
-      );
+      await dAppKit.signAndExecuteTransaction({ transaction: tx });
+      setGlbUploadStatus("3D Avatar Updated!");
+      setTimeout(() => {
+        setIsUpdatingGlb(false);
+        setGlbFile(null);
+        setGlbUploadStatus("");
+        refetchIdentity();
+      }, 1500);
 
     } catch (e: any) {
       setGlbUploadStatus("Error: " + e.message);
@@ -178,22 +140,13 @@ export function SettingsPage() {
       setBioUpdateStatus("Updating bio...");
       const tx = updateBio(identity.id, bioText);
 
-      signAndExecute(
-        { transaction: tx },
-        {
-          onSuccess: () => {
-            setBioUpdateStatus("Bio Updated!");
-            setTimeout(() => {
-              setIsUpdatingBio(false);
-              setBioUpdateStatus("");
-              refetchIdentity();
-            }, 1500);
-          },
-          onError: (e) => {
-            setBioUpdateStatus("Error: " + e.message);
-          }
-        }
-      );
+      await dAppKit.signAndExecuteTransaction({ transaction: tx });
+      setBioUpdateStatus("Bio Updated!");
+      setTimeout(() => {
+        setIsUpdatingBio(false);
+        setBioUpdateStatus("");
+        refetchIdentity();
+      }, 1500);
 
     } catch (e: any) {
       setBioUpdateStatus("Error: " + e.message);

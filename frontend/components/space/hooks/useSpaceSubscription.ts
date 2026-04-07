@@ -1,10 +1,11 @@
+import { getJsonRpcFallbackClient } from '@/app/providers';
 import { useState, useEffect } from 'react';
-import { useCurrentAccount, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit-react';
 import { PACKAGE_ID } from '@/config/sui';
 
 export function useSpaceSubscription(spaceKioskId: string | null) {
   const currentAccount = useCurrentAccount();
-  const suiClient = useSuiClient();
+  const suiClient = getJsonRpcFallbackClient();
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [identityId, setIdentityId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);

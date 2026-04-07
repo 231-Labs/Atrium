@@ -2,7 +2,7 @@ import { useState } from "react";
 import { RetroPanel } from "@/components/common/RetroPanel";
 import { RetroButton } from "@/components/common/RetroButton";
 import { getWalrusBlobUrl } from "@/config/walrus";
-import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useCurrentAccount } from "@mysten/dapp-kit-react";
 
 interface MerchCardProps {
   nft: {

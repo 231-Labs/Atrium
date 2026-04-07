@@ -1,5 +1,6 @@
+import { getJsonRpcFallbackClient } from '@/app/providers';
 import { useState, useEffect } from 'react';
-import { useCurrentAccount, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit-react';
 import { PACKAGE_ID } from '@/config/sui';
 import { fetchCategoryFromConfig } from '@/utils/configHelpers';
 
@@ -16,7 +17,7 @@ export interface SubscribedSpaceData {
 }
 
 export function useSubscribedSpaces() {
-  const suiClient = useSuiClient();
+  const suiClient = getJsonRpcFallbackClient();
   const currentAccount = useCurrentAccount();
   const [spaces, setSpaces] = useState<SubscribedSpaceData[]>([]);
   const [loading, setLoading] = useState(true);

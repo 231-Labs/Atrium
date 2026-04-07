@@ -1,4 +1,4 @@
-import { SuiClient, SuiEvent } from '@mysten/sui/client';
+import { SuiJsonRpcClient, SuiEvent } from '@mysten/sui/jsonRpc';
 import { PACKAGE_ID } from '@/config/sui';
 import { saveContent, StoredContent } from '@/utils/contentStorage';
 
@@ -7,9 +7,9 @@ import { saveContent, StoredContent } from '@/utils/contentStorage';
  * 使用事件驱动的索引策略，不依赖合约存储
  */
 export class ContentIndexer {
-  private suiClient: SuiClient;
+  private suiClient: SuiJsonRpcClient;
   
-  constructor(suiClient: SuiClient) {
+  constructor(suiClient: SuiJsonRpcClient) {
     this.suiClient = suiClient;
   }
   
@@ -89,7 +89,7 @@ export class ContentIndexer {
     onContentAdded: (content: StoredContent) => void
   ): Promise<() => Promise<boolean>> {
     try {
-      const unsubscribe = await this.suiClient.subscribeEvent({
+      const unsubscribe = await (this.suiClient as any).subscribeEvent({
         filter: {
           MoveEventType: `${PACKAGE_ID}::space::ContentAdded`
         },

@@ -6,7 +6,7 @@ import { getWalrusBlobUrl } from "@/config/walrus";
 import { useCreatorIdentity } from "@/components/identity/hooks/useCreatorIdentity";
 import { getIdentityImageBlobId } from "@/utils/identity-helpers";
 import { SubscribeButton } from "@/components/subscription/SubscribeButton";
-import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useCurrentAccount } from "@mysten/dapp-kit-react";
 
 interface LandingPageViewProps {
   space: any;

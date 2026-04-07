@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit-react';
 import { useKioskClient } from '@/components/providers/KioskClientProvider';
 
 export interface KioskData {

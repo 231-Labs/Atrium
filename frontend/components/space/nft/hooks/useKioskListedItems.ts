@@ -1,5 +1,5 @@
+import { getJsonRpcFallbackClient } from '@/app/providers';
 import { useState, useEffect, useCallback } from 'react';
-import { useSuiClient } from '@mysten/dapp-kit';
 import { useKioskClient } from '@/hooks/utils/useKioskClient';
 
 export interface ListedNFT {
@@ -12,7 +12,7 @@ export interface ListedNFT {
 }
 
 export function useKioskListedItems(kioskId: string | null) {
-  const suiClient = useSuiClient();
+  const suiClient = getJsonRpcFallbackClient();
   const kioskClient = useKioskClient();
   const [listedItems, setListedItems] = useState<ListedNFT[]>([]);
   const [loading, setLoading] = useState(false);

@@ -1,5 +1,5 @@
+import { getJsonRpcFallbackClient } from '@/app/providers';
 import { useState, useEffect } from 'react';
-import { useSuiClient } from '@mysten/dapp-kit';
 import { ContentIndexer } from '@/services/contentIndexer';
 import { 
   getContentBySpace, 
@@ -9,7 +9,7 @@ import {
 } from '@/utils/contentStorage';
 
 export function useSpaceContents(spaceId: string | null) {
-  const suiClient = useSuiClient();
+  const suiClient = getJsonRpcFallbackClient();
   const [contents, setContents] = useState<StoredContent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);

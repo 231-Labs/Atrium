@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useCurrentAccount, useSignPersonalMessage } from "@mysten/dapp-kit";
+import { useCurrentAccount, useDAppKit } from "@mysten/dapp-kit-react";
 import { downloadAndDecryptContentAsSubscriber } from "@/services/sealContent";
 
 interface VideoPlayerProps {
@@ -14,7 +14,7 @@ interface VideoPlayerProps {
 
 export function VideoPlayer({ blobId, resourceId, isSubscribed, subscriptionId, subscriptionProof }: VideoPlayerProps) {
   const currentAccount = useCurrentAccount();
-  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
+  const dAppKit = useDAppKit();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -51,7 +51,7 @@ export function VideoPlayer({ blobId, resourceId, isSubscribed, subscriptionId, 
       }
 
       const signFn = async (msg: Uint8Array) => {
-        const result = await signPersonalMessage({ message: msg });
+        const result = await dAppKit.signPersonalMessage({ message: msg });
         return { signature: result.signature };
       };
       

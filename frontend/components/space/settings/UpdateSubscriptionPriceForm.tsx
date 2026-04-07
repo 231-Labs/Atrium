@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import { useCurrentAccount, useDAppKit } from "@mysten/dapp-kit-react";
 import { RetroPanel } from "@/components/common/RetroPanel";
 import { RetroButton } from "@/components/common/RetroButton";
 import { updateSpaceConfig, MIST_PER_SUI, SUI_CHAIN } from "@/utils/transactions";
@@ -24,7 +24,7 @@ export function UpdateSubscriptionPriceForm({
   onClose,
 }: UpdateSubscriptionPriceFormProps) {
   const currentAccount = useCurrentAccount();
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const dAppKit = useDAppKit();
   const [status, setStatus] = useState<TransactionStatus>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   
@@ -54,33 +54,23 @@ export function UpdateSubscriptionPriceForm({
         }
       );
 
-      signAndExecute(
-        { 
-          transaction: tx,
-          chain: SUI_CHAIN,
-        },
-        {
-          onSuccess: (result) => {
-            console.log('✅ Subscription price updated successfully:', result);
-            setStatus('success');
-            
-            // Call onUpdated immediately with new price (in MIST)
-            if (onUpdated) {
-              onUpdated(priceInMist.toString());
-            }
-            
-            // Auto-hide success message after 2 seconds
-            setTimeout(() => {
-              onClose?.();
-            }, 2000);
-          },
-          onError: (error) => {
-            console.error("❌ Failed to update price:", error);
-            setStatus('error');
-            setErrorMessage(error.message || 'Transaction failed. Please try again.');
-          },
+      try {
+        const result = await dAppKit.signAndExecuteTransaction({ transaction: tx });
+        console.log('✅ Subscription price updated successfully:', result);
+        setStatus('success');
+
+        if (onUpdated) {
+          onUpdated(priceInMist.toString());
         }
-      );
+
+        setTimeout(() => {
+          onClose?.();
+        }, 2000);
+      } catch (error: any) {
+        console.error("❌ Failed to update price:", error);
+        setStatus('error');
+        setErrorMessage(error.message || 'Transaction failed. Please try again.');
+      }
     } catch (error: any) {
       console.error("Error:", error);
       setStatus('error');

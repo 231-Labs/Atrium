@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
+import { getJsonRpcFallbackClient } from '@/app/providers';
 import { PACKAGE_ID } from '@/config/sui';
 
 interface AuthToken {
@@ -46,7 +46,7 @@ export function useSpaceAuthToken(
       setAuthToken(prev => ({ ...prev, loading: true, error: null, refetch }));
 
       try {
-        const suiClient = new SuiClient({ url: getFullnodeUrl('testnet') });
+        const suiClient = getJsonRpcFallbackClient();
 
         if (isCreator) {
           const ownershipType = `${PACKAGE_ID}::space::SpaceOwnership`;

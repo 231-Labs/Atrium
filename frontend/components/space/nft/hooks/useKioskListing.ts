@@ -1,6 +1,7 @@
-import { useSignAndExecuteTransaction } from '@mysten/dapp-kit';
+import { useState } from 'react';
+import { useDAppKit } from '@mysten/dapp-kit-react';
 import { Transaction } from '@mysten/sui/transactions';
-import { MIST_PER_SUI, SUI_CHAIN } from '@/utils/transactions';
+import { MIST_PER_SUI } from '@/utils/transactions';
 
 interface UseKioskListingResult {
   listNFT: (kioskId: string, kioskCapId: string, itemId: string, itemType: string, priceInSui: number) => Promise<void>;
@@ -9,7 +10,8 @@ interface UseKioskListingResult {
 }
 
 export function useKioskListing(): UseKioskListingResult {
-  const { mutateAsync: signAndExecute, isPending } = useSignAndExecuteTransaction();
+  const dAppKit = useDAppKit();
+  const [isListing, setIsListing] = useState(false);
 
   const listNFT = async (
     kioskId: string,
@@ -32,21 +34,16 @@ export function useKioskListing(): UseKioskListingResult {
       ],
     });
 
-    await signAndExecute(
-      {
-        transaction: tx,
-        chain: SUI_CHAIN,
-      },
-      {
-        onSuccess: () => {
-          console.log('NFT listed successfully');
-        },
-        onError: (error) => {
-          console.error('Failed to list NFT:', error);
-          throw error;
-        },
-      }
-    );
+    setIsListing(true);
+    try {
+      await dAppKit.signAndExecuteTransaction({ transaction: tx });
+      console.log('NFT listed successfully');
+    } catch (error) {
+      console.error('Failed to list NFT:', error);
+      throw error;
+    } finally {
+      setIsListing(false);
+    }
   };
 
   const delistNFT = async (
@@ -67,27 +64,21 @@ export function useKioskListing(): UseKioskListingResult {
       ],
     });
 
-    await signAndExecute(
-      {
-        transaction: tx,
-        chain: SUI_CHAIN,
-      },
-      {
-        onSuccess: () => {
-          console.log('NFT delisted successfully');
-        },
-        onError: (error) => {
-          console.error('Failed to delist NFT:', error);
-          throw error;
-        },
-      }
-    );
+    setIsListing(true);
+    try {
+      await dAppKit.signAndExecuteTransaction({ transaction: tx });
+      console.log('NFT delisted successfully');
+    } catch (error) {
+      console.error('Failed to delist NFT:', error);
+      throw error;
+    } finally {
+      setIsListing(false);
+    }
   };
 
   return {
     listNFT,
     delistNFT,
-    isListing: isPending,
+    isListing,
   };
 }
-

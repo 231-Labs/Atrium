@@ -3,7 +3,7 @@ import {
   downloadAndDecryptContentAsCreator,
   downloadAndDecryptContentAsSubscriber,
 } from '@/services/sealContent';
-import { useCurrentAccount, useSignPersonalMessage } from '@mysten/dapp-kit';
+import { useCurrentAccount, useDAppKit } from '@mysten/dapp-kit-react';
 import { getWalrusAggregatorUrl } from '@/config/walrus';
 
 interface UseSecureContentOptions {
@@ -30,15 +30,15 @@ export function useSecureContent({
   authId,
 }: UseSecureContentOptions): UseSecureContentReturn {
   const currentAccount = useCurrentAccount();
-  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
+  const dAppKit = useDAppKit();
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isLoadingRef = useRef(false);
 
   const handleSign = useCallback(
-    (msg: Uint8Array) => signPersonalMessage({ message: msg }),
-    [signPersonalMessage]
+    (msg: Uint8Array) => dAppKit.signPersonalMessage({ message: msg }),
+    [dAppKit]
   );
 
   useEffect(() => {

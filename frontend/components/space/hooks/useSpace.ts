@@ -1,5 +1,5 @@
+import { getJsonRpcFallbackClient } from '@/app/providers';
 import { useState, useEffect } from 'react';
-import { useSuiClient } from '@mysten/dapp-kit';
 
 export interface SpaceDetailData {
   id: string;
@@ -14,7 +14,7 @@ export interface SpaceDetailData {
 }
 
 export function useSpace(spaceId: string | null) {
-  const suiClient = useSuiClient();
+  const suiClient = getJsonRpcFallbackClient();
   const [space, setSpace] = useState<SpaceDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);

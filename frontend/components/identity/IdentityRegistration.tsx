@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useCurrentAccount, useSignAndExecuteTransaction, useDisconnectWallet } from "@mysten/dapp-kit";
+import { useCurrentAccount, useDAppKit } from "@mysten/dapp-kit-react";
 import { uploadBlobToWalrus } from "@/services/walrusApi";
 import { mintIdentity } from "@/utils/transactions";
 import { RetroButton } from "@/components/common/RetroButton";
@@ -15,8 +15,7 @@ interface IdentityRegistrationProps {
 
 export function IdentityRegistration({ onComplete }: IdentityRegistrationProps) {
   const currentAccount = useCurrentAccount();
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
-  const { mutate: disconnect } = useDisconnectWallet();
+  const dAppKit = useDAppKit();
 
   const [step, setStep] = useState<"input" | "uploading" | "minting">("input");
   const [username, setUsername] = useState("");
@@ -33,7 +32,7 @@ export function IdentityRegistration({ onComplete }: IdentityRegistrationProps) 
   const [error, setError] = useState("");
 
   const handleDisconnect = () => {
-    disconnect();
+    dAppKit.disconnectWallet();
   };
 
   const handleProfileImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -96,26 +95,18 @@ export function IdentityRegistration({ onComplete }: IdentityRegistrationProps) 
         currentAccount.address  // Recipient address for PTB
       );
 
-      signAndExecute(
-        {
-          transaction: tx as any,
-          chain: 'sui:testnet',
-        },
-        {
-          onSuccess: (result) => {
-            console.log("Transaction successful:", result);
-            setProgress("Identity minted successfully! Welcome to Atrium.");
-            setTimeout(() => {
-              onComplete();
-            }, 2000);
-          },
-          onError: (error) => {
-            console.error("Transaction failed:", error);
-            setError(`Minting failed: ${error.message || 'Unknown error'}`);
-            setStep("input");
-          },
-        }
-      );
+      try {
+        const result = await dAppKit.signAndExecuteTransaction({ transaction: tx as any });
+        console.log("Transaction successful:", result);
+        setProgress("Identity minted successfully! Welcome to Atrium.");
+        setTimeout(() => {
+          onComplete();
+        }, 2000);
+      } catch (error: any) {
+        console.error("Transaction failed:", error);
+        setError(`Minting failed: ${error.message || 'Unknown error'}`);
+        setStep("input");
+      }
     } catch (err: any) {
       setError(`Error: ${err.message}`);
       setStep("input");

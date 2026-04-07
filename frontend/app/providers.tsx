@@ -14,37 +14,40 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
 
 /**
  * Legacy JSON-RPC client kept around for the few APIs that gRPC v2 doesn't
- * cover yet (notably `queryEvents`). Live consumers should prefer the gRPC
- * client returned by `useCurrentClient()`; this fallback is exposed via
- * `useJsonRpcClient()` below for surgical use only.
+ * cover yet (notably `queryEvents`). Lazily initialized to avoid SSR issues
+ * with window access in the SDK constructor.
  */
-const jsonRpcFallbackClient = new SuiJsonRpcClient({
-  network: 'testnet',
-  url: 'https://fullnode.testnet.sui.io:443',
-});
+let _jsonRpcFallbackClient: SuiJsonRpcClient | null = null;
 
-export function getJsonRpcFallbackClient() {
-  return jsonRpcFallbackClient;
+export function getJsonRpcFallbackClient(): SuiJsonRpcClient {
+  if (!_jsonRpcFallbackClient) {
+    _jsonRpcFallbackClient = new SuiJsonRpcClient({
+      network: 'testnet',
+      url: 'https://fullnode.testnet.sui.io:443',
+    });
+  }
+  return _jsonRpcFallbackClient;
 }
 
-const dAppKit = createDAppKit({
-  networks: ['testnet'],
-  defaultNetwork: 'testnet',
-  createClient: (network) =>
-    new SuiGrpcClient({
-      network,
-      baseUrl: 'https://fullnode.testnet.sui.io:443',
-    }),
-});
+type DAppKitInstance = ReturnType<typeof createDAppKit>;
 
 declare module '@mysten/dapp-kit-react' {
   interface Register {
-    dAppKit: typeof dAppKit;
+    dAppKit: DAppKitInstance;
   }
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
+  const [dAppKit] = useState(() => createDAppKit({
+    networks: ['testnet'],
+    defaultNetwork: 'testnet',
+    createClient: (network) =>
+      new SuiGrpcClient({
+        network,
+        baseUrl: 'https://fullnode.testnet.sui.io:443',
+      }),
+  }));
 
   return (
     <QueryClientProvider client={queryClient}>

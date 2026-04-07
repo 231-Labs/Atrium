@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useCurrentAccount } from "@mysten/dapp-kit-react";
 import { ThreeScene } from "@/components/3d/ThreeScene";
 import { WeatherModeToggle } from "@/components/3d/WeatherModeToggle";
 import { RetroFrameCanvas } from "@/components/3d/RetroFrameCanvas";
@@ -24,7 +24,7 @@ import { useSpaceConfig } from "../hooks/useSpaceConfig";
 import { useKioskManagement } from "../nft/hooks/useKioskManagement";
 import { purchaseNFT as purchaseNFTTx } from "@/utils/kioskTransactions";
 import { useKioskClient } from "@/components/providers/KioskClientProvider";
-import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
+import { useDAppKit, useCurrentClient } from "@mysten/dapp-kit-react";
 import { SUI_CHAIN } from "@/utils/transactions";
 
 interface SpaceDetailProps {
@@ -50,8 +50,8 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
   const router = useRouter();
   const currentAccount = useCurrentAccount();
   const kioskClient = useKioskClient();
-  const suiClient = useSuiClient();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const suiClient = useCurrentClient();
+  const dAppKit = useDAppKit();
 
   // Safety check for missing data when not loading
   if (!isLoading && !space) return null;
@@ -298,18 +298,8 @@ export function SpaceDetail({ space, isLoading = false, spaceId }: SpaceDetailPr
 
       console.log('📝 Transaction built successfully, executing...');
       
-      await signAndExecute(
-        { transaction: tx, chain: SUI_CHAIN },
-        {
-          onSuccess: () => {
-            console.log('✅ Purchase successful!');
-          },
-          onError: (error) => {
-            console.error('❌ Transaction execution failed:', error);
-            throw error;
-          },
-        }
-      );
+      await dAppKit.signAndExecuteTransaction({ transaction: tx });
+      console.log('✅ Purchase successful!');
     } catch (err: any) {
       console.error('❌ Purchase error:', err);
       throw new Error(err.message || 'Purchase failed');

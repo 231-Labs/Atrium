@@ -1,5 +1,6 @@
+import { getJsonRpcFallbackClient } from '@/app/providers';
 import { useState, useEffect } from 'react';
-import { useSuiClient, useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit-react';
 import { useKioskClient } from '@/hooks/utils/useKioskClient';
 
 export interface KioskCapData {
@@ -9,7 +10,7 @@ export interface KioskCapData {
 }
 
 export function useMarketplaceKioskCap(marketplaceKioskId: string | null) {
-  const suiClient = useSuiClient();
+  const suiClient = getJsonRpcFallbackClient();
   const currentAccount = useCurrentAccount();
   const kioskClient = useKioskClient();
   const [kioskCapId, setKioskCapId] = useState<string | null>(null);

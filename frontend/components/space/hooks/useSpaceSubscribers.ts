@@ -1,5 +1,5 @@
+import { getJsonRpcFallbackClient } from '@/app/providers';
 import { useState, useEffect } from 'react';
-import { useSuiClient } from '@mysten/dapp-kit';
 import { PACKAGE_ID, FAN_REGISTRY_ID } from '@/config/sui';
 import { getWalrusBlobUrl } from '@/config/walrus';
 
@@ -18,7 +18,7 @@ interface UseSpaceSubscribersReturn {
 }
 
 export function useSpaceSubscribers(spaceId: string | null): UseSpaceSubscribersReturn {
-  const suiClient = useSuiClient();
+  const suiClient = getJsonRpcFallbackClient();
   const [subscribers, setSubscribers] = useState<SubscriberAvatar[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);

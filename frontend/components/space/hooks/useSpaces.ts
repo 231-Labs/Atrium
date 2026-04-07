@@ -1,5 +1,5 @@
+import { getJsonRpcFallbackClient } from '@/app/providers';
 import { useState, useEffect } from 'react';
-import { useSuiClient } from '@mysten/dapp-kit';
 import { PACKAGE_ID } from '@/config/sui';
 import { fetchCategoryFromConfig } from '@/utils/configHelpers';
 
@@ -16,7 +16,7 @@ export interface SpaceData {
 }
 
 export function useSpaces() {
-  const suiClient = useSuiClient();
+  const suiClient = getJsonRpcFallbackClient();
   const [spaces, setSpaces] = useState<SpaceData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);

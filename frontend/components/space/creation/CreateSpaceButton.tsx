@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
+import { useCurrentAccount, useDAppKit } from "@mysten/dapp-kit-react";
+import { getJsonRpcFallbackClient } from '@/app/providers';
 import { uploadBlobToWalrus } from "@/services/walrusApi";
 import { initializeSpace, MIST_PER_SUI, SUI_CHAIN } from "@/utils/transactions";
 import { PACKAGE_ID } from "@/config/sui";
@@ -12,8 +13,8 @@ interface CreateSpaceButtonProps {
 
 export function CreateSpaceButton({ onCreated }: CreateSpaceButtonProps) {
   const currentAccount = useCurrentAccount();
-  const suiClient = useSuiClient();
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const suiClient = getJsonRpcFallbackClient();
+  const dAppKit = useDAppKit();
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [identityId, setIdentityId] = useState<string | null>(null);
@@ -86,50 +87,31 @@ export function CreateSpaceButton({ onCreated }: CreateSpaceButtonProps) {
         currentAccount.address
       );
 
-      signAndExecute(
-        { 
-          transaction: tx,
-          chain: SUI_CHAIN,
-        },
-        {
-          onSuccess: (result) => {
-            console.log('✅ Space created successfully:', result);
-            setLoading(false);
-            setIsOpen(false);
-            
-            // Dispatch global event for space creation
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('atrium-space-created', { 
-                detail: { result } 
-              }));
-            }
-            
-            onCreated();
-            setFormData({
-              name: "",
-              description: "",
-              subscriptionPrice: "1",
-              coverImage: null,
-            });
-          },
-          onError: (error) => {
-            console.error("❌ Failed to create space:", error);
-            setLoading(false);
-            
-            // Extract detailed error message
-            let errorMsg = 'Unknown error';
-            if (error instanceof Error) {
-              errorMsg = error.message;
-            } else if (typeof error === 'string') {
-              errorMsg = error;
-            } else if (error && typeof error === 'object') {
-              errorMsg = JSON.stringify(error, null, 2);
-            }
-            
-            alert(`Space creation failed:\n\n${errorMsg}\n\nPlease check:\n- Gas balance (need ~0.15 SUI)\n- Network connection\n- Console for details`);
-          },
+      try {
+        const result = await dAppKit.signAndExecuteTransaction({ transaction: tx });
+        console.log('✅ Space created successfully:', result);
+        setLoading(false);
+        setIsOpen(false);
+
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('atrium-space-created', { detail: { result } }));
         }
-      );
+
+        onCreated();
+        setFormData({ name: "", description: "", subscriptionPrice: "1", coverImage: null });
+      } catch (error: any) {
+        console.error("❌ Failed to create space:", error);
+        setLoading(false);
+        let errorMsg = 'Unknown error';
+        if (error instanceof Error) {
+          errorMsg = error.message;
+        } else if (typeof error === 'string') {
+          errorMsg = error;
+        } else if (error && typeof error === 'object') {
+          errorMsg = JSON.stringify(error, null, 2);
+        }
+        alert(`Space creation failed:\n\n${errorMsg}\n\nPlease check:\n- Gas balance (need ~0.15 SUI)\n- Network connection\n- Console for details`);
+      }
     } catch (error: any) {
       console.error("❌ Error during space creation:", error);
       setLoading(false);

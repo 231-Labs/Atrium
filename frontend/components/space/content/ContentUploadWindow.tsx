@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
+import { useCurrentAccount, useDAppKit } from '@mysten/dapp-kit-react';
 import { RetroWindow } from '@/components/common/RetroWindow';
 import { RetroButton } from '@/components/common/RetroButton';
 import { RetroPanel } from '@/components/common/RetroPanel';
@@ -60,7 +60,7 @@ export function ContentUploadWindow({
   initialPosition = { x: 100, y: 50 }
 }: ContentUploadWindowProps) {
   const currentAccount = useCurrentAccount();
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const dAppKit = useDAppKit();
   const { upload: uploadContent } = useContentUpload();
   
   // Window management
@@ -189,21 +189,8 @@ export function ContentUploadWindow({
         );
         
         try {
-          await new Promise<void>((resolve, reject) => {
-            signAndExecute(
-              { transaction: tx },
-              {
-                onSuccess: () => {
-                  console.log('✅ Content recorded on chain');
-                  resolve();
-                },
-                onError: (error) => {
-                  console.error('❌ Failed to record on chain:', error);
-                  reject(error);
-                }
-              }
-            );
-          });
+          await dAppKit.signAndExecuteTransaction({ transaction: tx });
+          console.log('✅ Content recorded on chain');
           
           setProgress('Recorded on blockchain!');
         } catch (error) {

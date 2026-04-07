@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import { useCurrentAccount, useDAppKit } from "@mysten/dapp-kit-react";
 import { subscribeToSpace, MIST_PER_SUI, SUI_CHAIN } from "@/utils/transactions";
 import { RetroPanel } from "@/components/common/RetroPanel";
 import { RetroButton } from "@/components/common/RetroButton";
@@ -19,7 +19,7 @@ type SubscriptionStatus = 'idle' | 'loading' | 'success' | 'error';
 
 export function SubscribeButton({ spaceId, spaceKioskCapId, creatorAddress, price, identityId, onSubscribed }: SubscribeButtonProps) {
   const currentAccount = useCurrentAccount();
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const dAppKit = useDAppKit();
   const [status, setStatus] = useState<SubscriptionStatus>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [duration, setDuration] = useState(30); // Default 30 days
@@ -50,27 +50,18 @@ export function SubscribeButton({ spaceId, spaceKioskCapId, creatorAddress, pric
         creatorAddress           // Creator address for PTB
       );
 
-      signAndExecute(
-        { 
-          transaction: tx,
-          chain: SUI_CHAIN,
-        },
-        {
-          onSuccess: (result) => {
-            console.log('✅ Subscription successful:', result);
-            setStatus('success');
-            // Auto-hide success message and call callback after 2 seconds
-            setTimeout(() => {
-              onSubscribed();
-            }, 2000);
-          },
-          onError: (error) => {
-            console.error('❌ Subscription failed:', error);
-            setStatus('error');
-            setErrorMessage(error.message || 'Transaction failed. Please try again.');
-          },
-        }
-      );
+      try {
+        const result = await dAppKit.signAndExecuteTransaction({ transaction: tx });
+        console.log('✅ Subscription successful:', result);
+        setStatus('success');
+        setTimeout(() => {
+          onSubscribed();
+        }, 2000);
+      } catch (error: any) {
+        console.error('❌ Subscription failed:', error);
+        setStatus('error');
+        setErrorMessage(error.message || 'Transaction failed. Please try again.');
+      }
     } catch (error: any) {
       console.error('Error:', error);
       setStatus('error');
